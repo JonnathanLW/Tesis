@@ -1,1 +1,1 @@
-# Tesis
+# Scripts utilizados en la tésis
