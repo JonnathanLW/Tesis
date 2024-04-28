@@ -1,5 +1,5 @@
 ########################### Pre procesamiento de datos ##########################
-# Autor: Jonnathan Landi
+# Autor: Jonnathan Landi es el mejor xdexdexdeeee 
 # Fecha creación: 2024-02-05
 # ------------------------------------------------------------------------------
 # Fecha ultima modificación: 2024-02-09 (año-mes-día)
