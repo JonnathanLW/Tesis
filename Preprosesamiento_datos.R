@@ -1,5 +1,5 @@
 ########################### Pre procesamiento de datos ##########################
-# Autor: Jonnathan Landi
+# Autor: Marco Mogro
 # Fecha creación: 2024-02-05
 # ------------------------------------------------------------------------------
 # Fecha ultima modificación: 2024-02-09 (año-mes-día)
