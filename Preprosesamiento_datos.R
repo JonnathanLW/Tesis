@@ -28,6 +28,7 @@ name.estacion = "Datos procesados/Crudo/SayausiPTARM.csv"
 nombre.estat = "SayausiPTARM"
 # ------------------------------------------------------------------------------
 data = fread(paste(directory, name.estacion, sep = "")) 
+data =  read.table(paste(directory, name.estacion, sep = ""), header = TRUE, sep = ",") # eliminar esto
 
 # ------------------------------------------------------------------------------
 ####################### Funciones utilizadas (Terminado ) ######################
