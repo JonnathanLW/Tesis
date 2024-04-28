@@ -1,9 +1,9 @@
 ########################### Pre procesamiento de datos ##########################
-<<<<<<< HEAD
+
 # Autor: Jonnathan Landi es el mejor xdexdexdeeee 
-=======
+
 # Autor: Marco Mogro1.1
->>>>>>> bcd1259a7a3bc5328ef3b5886741f066471797cf
+
 # Fecha creación: 2024-02-05
 # ------------------------------------------------------------------------------
 # Fecha ultima modificación: 2024-02-09 (año-mes-día)
@@ -32,7 +32,6 @@ name.estacion = "Datos procesados/Crudo/SayausiPTARM.csv"
 nombre.estat = "SayausiPTARM"
 # ------------------------------------------------------------------------------
 data = fread(paste(directory, name.estacion, sep = "")) 
-data =  read.table(paste(directory, name.estacion, sep = ""), header = TRUE, sep = ",") # eliminar esto
 
 # ------------------------------------------------------------------------------
 ####################### Funciones utilizadas (Terminado ) ######################
