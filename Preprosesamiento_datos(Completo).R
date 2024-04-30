@@ -22,12 +22,16 @@ library(tools)
 library(gridExtra)
 library(ggplot2)
 # ------------------------------------------------------------------------------
-directory = "C:/Users/Jonna/Desktop/Downscalling/Estaciones/"
-name.estacion = "Ventanas.csv"
+directory = "C:/Users/Jonna/Desktop/Downscalling/Ag_horario/"
+name.estacion = "Ventanas_horario.csv"
 nombre.estat = "Ventanas"
 # ------------------------------------------------------------------------------
 data = fread(paste(directory, name.estacion, sep = "")) 
-
+# FECHA.I = as.POSIXct("2014-04-09 16:30:00", format = "%Y-%m-%d %H:%M:%S")
+# fecha.f = as.POSIXct("2023-12-29 11:00:00", format = "%Y-%m-%d %H:%M:%S")
+# seq.fechas = seq(FECHA.I, fecha.f, by = "5 min")
+# FECHA = as.POSIXct("2014-04-09 16:30:00", format = "%Y-%m-%d %H:%M:%S")
+# data = data[data$TIMESTAMP > FECHA,]
 # ------------------------------------------------------------------------------
 ####################### Funciones utilizadas (Terminado ) ######################
 control.general = function(df) {
@@ -411,13 +415,13 @@ datos.faltantes.diario = function(df) {
     #        plot = p.f, width = 12, height = 8, units = "in", dpi = 300, type = "cairo")
     
     
-    # Guardo los datos diarios
-    if (!dir.exists(paste0(directory, "/Datos_diarios"))) {
-      dir.create(paste0(directory, "/Datos_diarios"))
-    }
-    
-    write.csv(df, paste0(directory, "Datos_diarios/", nombre.estat, ".csv"), row.names = FALSE)
-    
+    # # Guardo los datos diarios
+    # if (!dir.exists(paste0(directory, "/Datos_diarios"))) {
+    #   dir.create(paste0(directory, "/Datos_diarios"))
+    # }
+    # 
+    # write.csv(df, paste0(directory, "Datos_diarios/", nombre.estat, ".csv"), row.names = FALSE)
+    names(df)[2] = var
     return(df)
   }
   
@@ -456,5 +460,10 @@ datos.faltantes.diario = function(df) {
 # Llamado a funciones
 df = control.general(data)
 df = control.rangoFijo(df)
+summary(df)
 df = datos.faltantes.horario(df)
+dir = "C:/Users/Jonna/Desktop/Downscalling/Ag_horario"
+write.csv(df, paste0(dir, "/", nombre.estat, "_horario.csv"), row.names = FALSE)
 df = datos.faltantes.diario(df)
+dir = "C:/Users/Jonna/Desktop/Downscalling/Ag_diario"
+write.csv(df, paste0(dir, "/", nombre.estat, "_diario.csv"), row.names = FALSE)
