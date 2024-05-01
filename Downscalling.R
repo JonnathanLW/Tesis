@@ -81,14 +81,12 @@ micro.Soldados = read.csv(paste(dir.satelital, "/Soldados_crudo.csv", sep = ""))
 micro.Galgan = read.csv(paste(dir.satelital, "/Galgan_crudo.csv", sep = ""))
 micro.Quinsacocha = read.csv(paste(dir.satelital, "/Quinsacocha_crudo.csv", sep = ""))
 micro.Yanuncay = read.csv(paste(dir.satelital, "/Yanuncay_crudo.csv", sep = ""))
-
-
+# ------------------------------------------------------------------------------
 rename = function(data) {
   names(data) = c("Fecha", "prec")
   data$Fecha = as.Date(data$Fecha, format = "%Y-%m-%d")
   return(data)
 }
-
 # ------------------------------------------------------------------------------
 ######################## Microcuencas Bermejos - Soldados ######################
 # ------------------------------------------------------------------------------
@@ -103,7 +101,7 @@ data.B_S = merge(data.B_S, data.MamamagM, by = "Fecha", all = TRUE)
 names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "MamamagM")
 data.B_S$promedio = apply(data.B_S[,2:4], 1, mean, na.rm = TRUE)
 data.B_S = data.B_S[,c(1,5)]
-#obtener la fecha minima donde la columna promedio no sea NA
+#obtener la fecha mínima donde la columna promedio no sea NA
 min_date = min(data.B_S$Fecha[!is.na(data.B_S$promedio)])
 data.B_S = data.B_S[data.B_S$Fecha >= min_date,]
 fecha.min = min(data.B_S$Fecha)
@@ -133,9 +131,10 @@ indices = sample(1:nrow(data.clean), 0.8 * nrow(data.clean))
 data.train = data.clean[indices,]
 data.test = data.clean[-indices,]
 
-folds = createFolds(data.train$promedio, k = 5, list = TRUE, returnTrain = TRUE)
+n = 10
+folds = createFolds(data.train$promedio, k = n, list = TRUE, returnTrain = TRUE)
 resultados = list()
-for (i in 1:5){
+for (i in 1:n){
   train = data.train[folds[[i]],]
   test = data.train[-folds[[i]],]
   
@@ -145,24 +144,45 @@ for (i in 1:5){
   promedio_train = promedio.diaJuliano(train)
 
   factores = factores.correcion(promedio_train, promedio.Bermejos, paste("FC_Bermejos_Soldados_", i, sep = ""))
-  data_corregida <- datos.corregidos(data.crudoBermejos, factores, paste("Bermejos_corregido_", i, sep = ""))
+  data_corregida = datos.corregidos(data.crudoBermejos, factores, paste("Bermejos_corregido_", i, sep = ""))
   
-  test = rename(test)
-  test = dia.juliano(test)
-  names(test) = c("Fecha", "promedio", "anio", "dia_juliano")
-  promedio_test = promedio.diaJuliano(test)
-
-  resultados[[i]] = list(train = train, test = test, factores = factores, data_corregida = data_corregida)
+  obs_test = test$promedio
+  pred_test = data_corregida$prec_corregida[match(test$Fecha, data_corregida$Fecha)]
+  
+  rmse = sqrt(mean((obs_test - pred_test)^2))
+  mae = mean(abs(obs_test - pred_test))
+  r = cor(obs_test, pred_test)
+  pbias = 100 * sum(pred_test - obs_test) / sum(obs_test)
+  resultados[[i]] = list(train = train, test = test, factores = factores,
+                          data_corregida = data_corregida, rmse = rmse, mae = mae,
+                          r = r, pbias = pbias)
 }
 
-fold <- resultados[[1]]
+# Imprimir MAE y RMSE de cada fold
+for (i in 1:n) {
+  cat(sprintf("Fold %d:\n", i))
+  cat(sprintf("  MAE = %.4f\n", resultados[[i]]$mae))
+  cat(sprintf("  RMSE = %.4f\n", resultados[[i]]$rmse))
+  cat(sprintf("  r = %.4f\n", resultados[[i]]$r))
+  cat(sprintf("  pbias = %.4f\n", resultados[[i]]$pbias))
+}
 
-# Aplicar los factores de corrección al test_data
-data_crudo_test <- rename(micro.Bermejos) # Cambiar a los datos crudos correspondientes al test_data
-data_crudo_test <- dia.juliano(data_crudo_test)
-data_corregida_test <- datos.corregidos(data_crudo_test, fold$factores, "Bermejos_corregido_test")
 
-# Comparar la precipitación corregida con la observada en test_data
-resultados_test <- merge(fold$test, data_corregida_test, by = "Fecha", all = TRUE)
-gof(resultados_test$prec, resultados_test$prec_corregida)
+# Evaluación del modelo con datos nunca vistos ----------------------------
+mejores_factores = resultados[[4]]$factores
 
+# Aplicar los factores de corrección a los datos crudos para obtener los datos corregidos
+data.test = rename(data.test)
+data.test = dia.juliano(data.test)
+data_corregida_test = datos.corregidos(data.crudoBermejos, mejores_factores, "Test")
+
+# Calcular métricas de error en el conjunto de prueba
+obs_test = data.test$prec
+pred_test = data_corregida_test$prec_corregida[match(data.test$Fecha, data_corregida_test$Fecha)]
+rmse_test = sqrt(mean((obs_test - pred_test)^2))
+mae_test = mean(abs(obs_test - pred_test))
+
+# Imprimir resultados
+cat(sprintf("Resultados en el conjunto de prueba:\n"))
+cat(sprintf("  MAE = %.4f\n", mae_test))
+cat(sprintf("  RMSE = %.4f\n", rmse_test))
