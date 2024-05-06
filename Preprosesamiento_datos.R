@@ -26,10 +26,9 @@ library(tools)
 library(gridExtra)
 library(ggplot2)
 # ------------------------------------------------------------------------------
-directory = "C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Scripts R/Preprocesamiento de datos/Dependencias/Estaciones meteorologicas/"
-name.estacion = "Datos procesados/Crudo/SayausiPTARM.csv"
-# nombre.estat = sub("Datos_horarios/", "", name.estacion)
-nombre.estat = "SayausiPTARM"
+directory = "C:/Users/Jonna/Desktop/Randon_Forest/Estaciones_Tierra/Historico/Preprocesado/"
+name.estacion = "Izhcayrrumi.csv"
+nombre.estat = "Izhcayrrumi"
 # ------------------------------------------------------------------------------
 data = fread(paste(directory, name.estacion, sep = "")) 
 
@@ -464,8 +463,8 @@ datos.faltantes.diario = function(df) {
   }
   
   p.f = grid.arrange(grobs = graficos)
-  ggsave(paste0(directory, "G_agrupacionDiaria/", nombre.estat, "_diario.png"),
-         plot = p.f, width = 12, height = 8, units = "in", dpi = 300, type = "cairo")
+  # ggsave(paste0(directory, "G_agrupacionDiaria/", nombre.estat, "_diario.png"),
+  #        plot = p.f, width = 12, height = 8, units = "in", dpi = 300, type = "cairo")
   
   
   # Guardo los datos diarios
@@ -652,7 +651,7 @@ datos.atipicos = function(df) {
 ####################### Ejecución de control de datos ##########################
 data = control.general(data)  #Control de datos generales
 data = control.rangoFijo(data) # Control de rango fijo 
-
+summary(data)
 data = datos.faltantes.horario(data) # Control de datos faltantes horarios
 data = datos.faltantes.diario(data) # Control de datos faltantes diarios
 data = datos.faltantes.mensual(data) # Control de datos faltantes mensuales
