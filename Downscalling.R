@@ -7,31 +7,107 @@ library(caret)
 # ------------------------------------------------------------------------------
 ######################### Funciones auxiliares #################################
 dia.juliano = function(df) {
+  #df = micro.Bermejos
+  # df = rename(df)
+  Fecha.1 = as.Date("2016-02-29")
+  Fecha.2 = as.Date("2020-02-29")
+  Fecha.3 = as.Date("2024-02-29")
+  df_julianos = as.Date(c(Fecha.1, Fecha.2, Fecha.3))
+  fechas.presentes = intersect(df_julianos, df$Fecha)
+  
   # Igualo los años para que todos tengan 365 dias
   df_29.i = which(format(df$Fecha, "%m-%d") == "02-29")
   df_29 = df[df_29.i,]
   
-  # Elimino los años bisiestos
-  df = df[-df_29.i,]
-  rownames(df) = NULL
+  f = function(n){
+    df = df[-df_29.i,]
+    rownames(df) = NULL
+    df$anio = as.numeric(format(df$Fecha, "%Y"))
+    df_temp1 = df[!df$anio %in% c(n),]
+    df_temp2 = df[df$anio %in% c(n),] # incluyen datos de 29 de febrero
+    
+    # Calculo el día juliano para aquellos años no bisiestos
+    df_temp1$dia_juliano = as.numeric(format(df_temp1$Fecha, "%j"))
+    
+    # Calculo el día juliano para aquellos años bisiestos
+    df_temp2$dia_juliano = seq_len(nrow(df_temp2)) %% 365
+    df_temp2$dia_juliano[df_temp2$dia_juliano == 0] = 365
+    
+    # Uno los dos dataframes
+    df = rbind(df_temp1, df_temp2)
+    # ordeno por fecha
+    df = df[order(df$Fecha),]
+    # Acción si solo Fecha.1 está en df_compara
+    return(df)
+  }
+  f.2 = function(n1, n2){
+    df = df[-df_29.i,]
+    rownames(df) = NULL
+    df$anio = as.numeric(format(df$Fecha, "%Y"))
+    df_temp1 = df[!df$anio %in% c(n1, n2),]
+    df_temp2 = df[df$anio %in% c(n1, n2),] # incluyen datos de 29 de febrero
+    # Calculo el día juliano para aquellos años no bisiestos
+    df_temp1$dia_juliano = as.numeric(format(df_temp1$Fecha, "%j"))
+    # Calculo el día juliano para aquellos años bisiestos
+    df_temp2$dia_juliano = seq_len(nrow(df_temp2)) %% 365
+    df_temp2$dia_juliano[df_temp2$dia_juliano == 0] = 365
+    
+    # Uno los dos dataframes
+    df = rbind(df_temp1, df_temp2)
+    # ordeno por fecha
+    df = df[order(df$Fecha),]
+    # Acción si solo Fecha.1 está en df_compara
+    return(df)
+  }
+  f.3 = function(n1, n2, n3){
+    df = df[-df_29.i,]
+    rownames(df) = NULL
+    df$anio = as.numeric(format(df$Fecha, "%Y"))
+    df_temp1 = df[!df$anio %in% c(n1, n2, n3),]
+    df_temp2 = df[df$anio %in% c(n1, n2, n3),] # incluyen datos de 29 de febrero
+    # Calculo el día juliano para aquellos años no bisiestos
+    df_temp1$dia_juliano = as.numeric(format(df_temp1$Fecha, "%j"))
+    # Calculo el día juliano para aquellos años bisiestos
+    df_temp2$dia_juliano = seq_len(nrow(df_temp2)) %% 365
+    df_temp2$dia_juliano[df_temp2$dia_juliano == 0] = 365
+    
+    # Uno los dos dataframes
+    df = rbind(df_temp1, df_temp2)
+    # ordeno por fecha
+    df = df[order(df$Fecha),]
+    # Acción si solo Fecha.1 está en df_compara
+    return(df)
+  }
+  
+  if (nrow(df_29) > 1) {
+    if(length(fechas.presentes) == 1 && as.Date("2016-02-29") %in% df$Fecha) {
+      df = f(2016)
+    } else if(length(fechas.presentes) == 1 && as.Date("2020-02-29") %in% df$Fecha) {
+      df = f(2020)
+    } else if(length(fechas.presentes) == 1 && as.Date("2024-02-29") %in% df$Fecha) {
+      df = f(2024)
+    } else if(length(fechas.presentes) == 2 && as.Date("2016-02-29") %in% df$Fecha && as.Date("2020-02-29") %in% df$Fecha) {
+      df = f.2(2016, 2020)
+      # Acción si Fecha.1 y Fecha.2 están juntas en df_compara
+    } else if(length(fechas.presentes) == 2 && as.Date("2016-02-29") %in% df$Fecha && as.Date("2024-02-29") %in% df$Fecha) {
+      df = f.2(2016, 2024)
+      # Acción si Fecha.1 y Fecha.3 están juntas en df_compara
+    } else if(length(fechas.presentes) == 2 && as.Date("2020-02-29") %in% df$Fecha && as.Date("2024-02-29") %in% df$Fecha) {
+      df = f.2(2020, 2024)
+      # Acción si Fecha.2 y Fecha.3 están juntas en df_compara
+    } else if (length(fechas.presentes) == 3) {
+      # Acción si las tres fechas están juntas en df_compara
+      df = f.3(2016, 2020, 2024)
+    } else {
+      dlg_message("Verifique el script posibles errores encoentrados")
+      stop("Error en el script")
+    }
+  }
   df$anio = as.numeric(format(df$Fecha, "%Y"))
-  
-  # Subdivido mi set de datos
-  df_temp1 = df[!df$anio %in% c(2016, 2020, 2024),]
-  df_temp2 = df[df$anio %in% c(2016, 2020, 2024),] # incluyen datos de 29 de febrero
-  
-  # Calculo el día juliano para aquellos años no bisiestos
-  df_temp1$dia_juliano = as.numeric(format(df_temp1$Fecha, "%j"))
-  
-  # Calculo el día juliano para aquellos años bisiestos
-  df_temp2$dia_juliano = seq_len(nrow(df_temp2)) %% 365
-  df_temp2$dia_juliano[df_temp2$dia_juliano == 0] = 365
-  
-  # Uno los dos dataframes
-  df = rbind(df_temp1, df_temp2)
-  # ordeno por fecha
+  df$dia_juliano = as.numeric(format(df$Fecha, "%j"))
   df = df[order(df$Fecha),]
-}
+  }
+
 promedio.diaJuliano = function(df) {
   df = df %>% select(dia_juliano, promedio)
   model = as.matrix(df)
@@ -42,20 +118,34 @@ promedio.diaJuliano = function(df) {
   }
   return(prom.day)
 }
+
 factores.correcion = function(prom.obs,prom.sat, name ){
   fact_correc = array(0,dim=c(1,365))
-  for (i in 1:365){
-    fact_correc[i]= prom.obs[i]/prom.sat[i]
+  last_value = NA
+  for (i in 1:365) {
+    if (prom.sat[i] == 0) {
+      if (!is.na(last_value)) {
+        fact_correc[i] = last_value  # Usar el último valor calculado si prom.sat[i] es cero
+      } else {
+        fact_correc[i] = NA  # Si no hay un último valor, asignar NA
+      }
+    } else {
+      fact_correc[i] = prom.obs[i] / prom.sat[i]
+      last_value = fact_correc[i]  # Actualizar el último valor calculado
+    }
   }
+  
   fact_correc = t(fact_correc)
   seq = seq(1,365,1)
   fact_correc = cbind(seq, fact_correc)
   fact_correc = as.data.frame(fact_correc)
+  
   names(fact_correc) = c("dia_juliano", "factor_correcion")
   directory.save_fc = "C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Datos Satelitales/Factores de corrección"
  # write.csv(fact_correc, paste(directory.save_fc, "/", name, ".csv", sep = ""))
   return(fact_correc)
 }
+
 datos.corregidos = function(data_crudo, fact_correc, name.g){
   data_crudo = data_crudo %>% select(Fecha, dia_juliano, prec) # nomenclatura 
   data.original = data_crudo
@@ -76,17 +166,15 @@ rename = function(data) {
 }
 
 ######################### Validación cruzada con k folds #######################
-n = 5 # número de folds
+n = 10 # número de folds
 validacion.cruzada = function(data.obs, name.micro, name.fc, promedio.micro){
-  # # ----- Debug
+  set.seed(123)
+  # 
   # data.obs = data.B_S
   # name.micro = "Bermejos"
-  # name.fc = "Bermejos-soldados"
+  # name.fc = "Bermejos"
   # promedio.micro = promedio.Bermejos
-  # data.sat = micro.Bermejos
-  # # ----- Debug
-  # 80% de los datos para entrenamiento y 20% para validación
-  set.seed(123)
+  
   data.clean = na.omit(data.obs)
   indices = sample(1:nrow(data.clean), 0.8 * nrow(data.clean))
   data.train = data.clean[indices,]
@@ -102,21 +190,37 @@ validacion.cruzada = function(data.obs, name.micro, name.fc, promedio.micro){
     train = dia.juliano(train)
     names(train) = c("Fecha", "promedio", "anio", "dia_juliano")
     promedio_train = promedio.diaJuliano(train)
-    
+    # any(is.na(promedio.micro)) # eliminar
+
+    # Temportal
+
     factores = factores.correcion(promedio_train, promedio.micro, paste("FC_",name.fc, i, sep = ""))
+    # any(is.na(factores)) # eliminar
     data_corregida = datos.corregidos(data.crudoBermejos, factores, paste(name.micro, "_", i, sep = ""))
+    
     
     obs_test = test$promedio
     pred_test = data_corregida$prec_corregida[match(test$Fecha, data_corregida$Fecha)]
+    valid_values = complete.cases(obs_test, pred_test)
+    obs_testV = obs_test[valid_values]
+    pred_testV = pred_test[valid_values]
     
-    rmse = sqrt(mean((obs_test - pred_test)^2))
-    mae = mean(abs(obs_test - pred_test))
-    r = cor(obs_test, pred_test)
-    pbias = 100 * sum(pred_test - obs_test) / sum(obs_test)
+    test = gof(pred_testV, obs_testV)
+    test = data.frame(test)
+    names(test) = "valor"
+    # Crear un nuevo marco de datos con los nombres de las filas como una columna
+    test.f = cbind(Estadistico = rownames(test), test)
+    rownames(test.f)  = NULL
     
+    me = mean(obs_testV - pred_testV)
+    rmse = sqrt(mean(obs_testV - pred_testV)^2)
+    mae = mean(abs(obs_testV - pred_testV))
+    r = cor(obs_testV, pred_testV)
+    pbias = 100 * sum(pred_testV - obs_testV) / sum(obs_testV)
+
     resultados[[i]] = list(data.test = data.test, train = train, test = test, factores = factores,
                            data_corregida = data_corregida, rmse = rmse, mae = mae,
-                           r = r, pbias = pbias)
+                           r = r, pbias = pbias, test = test.f)
   }
   
   # Imprimir MAE y RMSE de cada fold
@@ -135,9 +239,24 @@ validacion.cruzada = function(data.obs, name.micro, name.fc, promedio.micro){
   estadisticos_final = do.call(rbind, estadisticos_lista)
   estadisticos <<- estadisticos_final
   
+  gof_lista = list()
+  
+  # Calcular gof para cada iteración y almacenar los resultados en la lista
+  for (i in 1:n) {
+    test = resultados[[i]]$test
+    gof_lista[[paste("Fold", i)]] = test
+  }
+  
+  # Combinar los resultados en un único marco de datos
+  gof_df = do.call(cbind, gof_lista)
+  gof_df = as.data.frame(gof_df)
+  colnames(gof_df) = paste("Fold", 1:n, sep = "_")
+  gof_df <<- gof_df
+  
   return(resultados)
   
 }
+
 evaluacion.final = function(rest.validation, best.factor, data.crudo) {
 
   #-----
@@ -154,6 +273,17 @@ evaluacion.final = function(rest.validation, best.factor, data.crudo) {
   obs_test = data.test$prec
   pred_test = data_corregida_test$prec_corregida[match(data.test$Fecha, data_corregida_test$Fecha)]
   
+  valid_values = complete.cases(obs_test, pred_test)
+  obs_testVV = obs_test[valid_values]
+  pred_testVV = pred_test[valid_values]
+  
+  test = gof(pred_testVV, obs_testVV)
+  test = data.frame(test)
+  names(test) = "valor"
+  # Crear un nuevo marco de datos con los nombres de las filas como una columna
+  test.f = cbind(Estadistico = rownames(test), test)
+  rownames(test.f)  = NULL
+
   rmse_test = sqrt(mean((obs_test - pred_test), na.rm = TRUE)^2)
   mae_test = mean(abs(obs_test - pred_test), na.rm = TRUE)
   r_test = cor(obs_test, pred_test, use = "complete.obs")
@@ -165,6 +295,8 @@ evaluacion.final = function(rest.validation, best.factor, data.crudo) {
     r = r_test,
     pbias = pbias_test
   )
+  
+  GOF_final <<- test.f
 
   return(evaluacion.final)
   
@@ -174,16 +306,18 @@ evaluacion.final = function(rest.validation, best.factor, data.crudo) {
 # ------------------------------------------------------------------------------
 ######################## Carga de datos obs y satelitales ######################
 # Cargar datos Observados ------------------------------------------------------
-directory = "C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Scripts R/Preprocesamiento de datos/Dependencias/Estaciones meteorologicas/Datos procesados/Diario"
+directory = "C:/Users/Jonna/Desktop/Randon_Forest/Estaciones_Tierra/Diario"
 data.Ventanas = read.csv(paste(directory, "/Ventanas.csv", sep = ""))
 data.Chaucha = read.csv(paste(directory, "/Chaucha.csv", sep = ""))
-data.Izcairrumi = read.csv(paste(directory, "/Izcairrumi.csv", sep = ""))
+data.Izcairrumi = read.csv(paste(directory, "/Izhcayrrumi.csv", sep = ""))
+data.SoldadosPTARM = read.csv(paste(directory, "/SoldadosPTARM.csv", sep = ""))
 data.MamamagM = read.csv(paste(directory, "/MamamagM.csv", sep = ""))
 data.Llaviucu = read.csv(paste(directory, "/Llaviucu.csv", sep = ""))
 data.CebollarPTAPM = read.csv(paste(directory, "/CebollarPTAPM.csv", sep = ""))
 # Cargar datos Satelitales -----------------------------------------------------
-dir.satelital = "C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Datos Satelitales/Datos_extraidos/precipitacion_crudo"
-micro.Bermejos = read.csv(paste(dir.satelital, "/Bermejos_crudo.csv", sep = ""))
+dir.satelital = "C:/Users/Jonna/Desktop/Randon_Forest/AlgoritmoFC"
+micro.Bermejos = read.csv(paste(dir.satelital, "/Bermejos.csv", sep = ""))
+
 micro.Soldados = read.csv(paste(dir.satelital, "/Soldados_crudo.csv", sep = ""))
 micro.Galgan = read.csv(paste(dir.satelital, "/Galgan_crudo.csv", sep = ""))
 micro.Quinsacocha = read.csv(paste(dir.satelital, "/Quinsacocha_crudo.csv", sep = ""))
@@ -198,14 +332,19 @@ micro.Yanuncay = read.csv(paste(dir.satelital, "/Yanuncay_crudo.csv", sep = ""))
 # Preparación de los factores de corrección de datos observados ----------------
 data.Ventanas = rename(data.Ventanas)
 data.Izcairrumi = rename(data.Izcairrumi)
+data.SoldadosPTARM = rename(data.SoldadosPTARM)
+
+
 data.MamamagM = rename(data.MamamagM)
 # Promedio de las estaciones Ventanas e Izcairrumi (Observadas)
 data.B_S = merge(data.Ventanas, data.Izcairrumi, by = "Fecha", all = TRUE)
 names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi")
+data.B_S = merge(data.B_S, data.SoldadosPTARM, by = "Fecha", all = TRUE)
+names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "SoldadosPTARM")
 data.B_S = merge(data.B_S, data.MamamagM, by = "Fecha", all = TRUE)
 names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "MamamagM")
-data.B_S$promedio = apply(data.B_S[,2:4], 1, mean, na.rm = TRUE)
-data.B_S = data.B_S[,c(1,5)]
+data.B_S$promedio = apply(data.B_S[,2:3], 1, mean, na.rm = TRUE)
+data.B_S = data.B_S[,c(1,4)]
 #obtener la fecha mínima donde la columna promedio no sea NA
 min_date = min(data.B_S$Fecha[!is.na(data.B_S$promedio)])
 data.B_S = data.B_S[data.B_S$Fecha >= min_date,]
@@ -221,14 +360,15 @@ data.Bermejos = dia.juliano(data.Bermejos)
 # promedio de los dias julianos 
 names(data.Bermejos) = c("Fecha", "promedio", "anio", "dia_juliano")
 promedio.Bermejos = promedio.diaJuliano(data.Bermejos)
+any(is.na(promedio.Bermejos)) # eliminar
 
 # Corrección de los datos satelitales de Bermejos
 data.crudoBermejos = rename(micro.Bermejos)
 data.crudoBermejos = dia.juliano(data.crudoBermejos)
 
 # Validación cruzada ------------------------------------------------------
-cross.validationBERMEJOS = validacion.cruzada(data.B_S, "Bermejos", "Bermejos-soldados", promedio.Bermejos)
-eval.BermF = evaluacion.final(cross.validationBERMEJOS, 3, data.crudoBermejos)
+cross.validationBERMEJOS = validacion.cruzada(data.B_S, "Bermejos", "Bermejos", promedio.Bermejos)
+eval.BermF = evaluacion.final(cross.validationBERMEJOS, 7, data.crudoBermejos)
 
 ################################################################################
 # --------------------------------- Yanuncay -----------------------------------
