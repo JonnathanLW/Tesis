@@ -1,6 +1,9 @@
+# Librerías utilizadas ----------------------------------------------------------
 library(caret)
 library(hydroGOF)
 
+# ------------------------------------------------------------------------------
+# Cargo datos necesarios
 Estaciones = read.csv("C:/Users/Jonna/Desktop/Randon_Forest/AlgoritmoRF/YanunTomebPpts.csv")
 Estaciones$TIMESTAMP = as.Date(Estaciones$TIMESTAMP, format = "%Y-%m-%d")
 summary(Estaciones)
@@ -23,6 +26,7 @@ for (i in 1:nrow(metadatos.estaciones)) {
 distancias_km_df = as.data.frame(distancias_km)
 rownames(distancias_km_df) = metadatos.estaciones$Nombre
 colnames(distancias_km_df) = metadatos.estaciones$Nombre
+rm(distancias_km)
 
 distancias.cebollar = distancias_km_df[, "CebollarPTAPM"]
 distancias.cebolalr = data.frame(distancias.cebollar)
@@ -33,15 +37,15 @@ distancias.cebolalr$peso = 1/distancias.cebolalr$distancia
 # Aplico el modelo -------------------------------------------------------------
 set.seed(123)
 df = na.omit(Estaciones)
+cor(df[,-1])
 indices = sample(1:nrow(df), nrow(df)*0.8)
 data.train = df[indices,]
 length(data.train)
 data.test = df[-indices,]
 
 pesos = rep(1/3.674189, nrow(data.train))
-length(pesos)
 control = trainControl(method = "cv", number = 5)
-model.c = train(CebollarPTAPM ~ Totoracocha , data = data.train, method = "lm", trControl = control)
+model.c = train(CebollarPTAPM ~ Totoracocha , data = data.train, method = "lm", trControl = control, weights = pesos)
 model.c$resample
 
 predicciones = predict(model.c$finalModel, data.test)
@@ -62,3 +66,15 @@ valores.pred
 
 # Rellenar los datos faltantes
 Estaciones$CebollarPTAPM[datos.Na] = valores.pred
+
+# indices donde exista NA en estaciones 
+datos.Na = is.na(Estaciones$Ventanas)
+datos.relleno = Estaciones[datos.Na,]
+valores.pred = predict(model.c$finalModel, datos.relleno)
+valores.pred
+
+# grafico de densidad
+plot(density(data.final$CebollarPTAPM), col = "blue", lwd = 2, main = "Densidad de precipitacion", xlab = "Precipitacion", ylab = "Densidad")
+lines(density(data.final$data.pSE), col = "red", lwd = 2)
+legend("topright", c("Observado", "Predicho"), col = c("blue", "red"), lwd = 2)
+
