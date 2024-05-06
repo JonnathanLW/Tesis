@@ -2,6 +2,7 @@
 library(dplyr)
 library(hydroGOF)
 library(caret)
+library(qmap)
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
@@ -103,6 +104,7 @@ dia.juliano = function(df) {
       stop("Error en el script")
     }
   }
+  
   df$anio = as.numeric(format(df$Fecha, "%Y"))
   df$dia_juliano = as.numeric(format(df$Fecha, "%j"))
   df = df[order(df$Fecha),]
@@ -159,10 +161,34 @@ datos.corregidos = function(data_crudo, fact_correc, name.g){
  # write.csv(df, paste(direc.save, "/", name.g, ".csv", sep = ""))
   return(df)
 }
+
 rename = function(data) {
   names(data) = c("Fecha", "prec")
   data$Fecha = as.Date(data$Fecha, format = "%Y-%m-%d")
   return(data)
+}
+
+mapeo.cuantil = function(data.obser, data.satelit){
+  
+  # data.obser = data.B_S
+  # data.satelit = micro.Bermejos
+  
+  names(data.obser) = c("Fecha", "prec")
+  names(data.satelit) = c("Fecha", "prec")
+  
+  mapeo = ecdf(data.obser$prec)
+  mapeo.cuantil = quantile(data.satelit$prec, probs = mapeo(data.satelit$prec))
+  data.satelit$prec_cuantil =  mapeo.cuantil
+  
+  data.merge = merge(data.obser, data.satelit, by = "Fecha")
+  names(data.merge) = c("Fecha", "prec", "prec_sat", "prec_cuantil")
+  gof(data.merge$prec_cuantil, data.merge$prec)
+  gof(data.merge$prec_sat, data.merge$prec)
+  
+  
+  bias_factor = 1 - (11.20 / 100)
+  data.merge$prec_corregida = data.merge$prec_sat * bias_factor
+  gof(data.merge$prec_corregida, data.merge$prec)
 }
 
 ######################### Validación cruzada con k folds #######################
@@ -301,6 +327,8 @@ evaluacion.final = function(rest.validation, best.factor, data.crudo) {
   return(evaluacion.final)
   
 }
+
+###################### Corrección del sesgo (Mapeo de cuantiles) ###############
 # ------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------
@@ -317,6 +345,10 @@ data.CebollarPTAPM = read.csv(paste(directory, "/CebollarPTAPM.csv", sep = ""))
 # Cargar datos Satelitales -----------------------------------------------------
 dir.satelital = "C:/Users/Jonna/Desktop/Randon_Forest/AlgoritmoFC"
 micro.Bermejos = read.csv(paste(dir.satelital, "/Bermejos.csv", sep = ""))
+micro.Bermejos$TIMESTAMP = as.Date(micro.Bermejos$TIMESTAMP, format = "%Y-%m-%d")
+datemin.sat = min(micro.Bermejos$TIMESTAMP)
+datemax.sat = max(micro.Bermejos$TIMESTAMP)
+
 
 micro.Soldados = read.csv(paste(dir.satelital, "/Soldados_crudo.csv", sep = ""))
 micro.Galgan = read.csv(paste(dir.satelital, "/Galgan_crudo.csv", sep = ""))
@@ -351,6 +383,7 @@ data.B_S = data.B_S[data.B_S$Fecha >= min_date,]
 fecha.min = min(data.B_S$Fecha)
 fecha.max = max(data.B_S$Fecha)
 summary(data.B_S)
+data.B_S = data.B_S[data.B_S$Fecha >= datemin.sat & data.B_S$Fecha <=datemax.sat,]
 # Preparo datos -----------------------------------------------------------
 #Promedio de las estaciones ventanas e Izcairrumi (Satelitales)
 data.Bermejos = rename(micro.Bermejos)
