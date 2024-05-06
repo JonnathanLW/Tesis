@@ -23,21 +23,17 @@ library(data.table)
 
 # ------------------------------------------------------------------------------
 # Cargo datos necesarios
-directory = "C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Scripts R/Randon_Forest"
-YanuncayPPts = fread(file.path(directory, "YanuncayPpts.csv"))
-summary(YanuncayPPts)
+directory = "C:/Users/Jonna/Desktop/Randon_Forest/AlgoritmoRF"
+YanuncayPPts = fread(file.path(directory, "YanunTomebPpts.csv"))
 YanuncayPPts = data.frame(YanuncayPPts)
-names(YanuncayPPts) = c("TIMESTAMP", "M001", "M002", "M003")
-YanuncayPPts = YanuncayPPts[,c("TIMESTAMP", "M001")]
+names(YanuncayPPts) = c("TIMESTAMP", "M001", "M002", "M003", "M004", "M005")
 YanuncayPPts = zoo::zoo(YanuncayPPts[, -1], order.by = as.Date(YanuncayPPts$TIMESTAMP))
 
-YanuncayPPgis = fread(file.path(directory, "YanuncayPPgis.csv"))
+YanuncayPPgis = fread(file.path(directory, "YanunTomebPPgis.csv"))
 YanuncayPPgis = data.frame(YanuncayPPgis)
-YanuncayPPgis = YanuncayPPgis[1,]
+
 # Área de la cuenca del Yanuncay 
-YanuncaySHP = st_read("C:/Users/Jonna/Desktop/Cuenca_Yanuncay/Cuenca_Yanuncay.shp")
-res(YanuncaySHP)
-#lonLat17s =  CRS("+proj=longlat +datum=WGS84 +no_defs") #
+YanuncaySHP = st_read("C:/Users/Jonna/Desktop/Randon_Forest/Shape_general/YanunTomeb.shp")
 YanuncaySHP = st_transform(YanuncaySHP, crs = 4326)
 
 # preparo mis estaciones
@@ -52,13 +48,18 @@ ggplot() +
   theme_minimal()
 
 # Cargo datos satelitales y DEM
-MSWEP = brick(paste0(directory, "/YanuncaySatResampling.nc"))
-MSWEP = MSWEP[[232:3488]]
+MSWEP = brick(paste0(directory, "/Img_0.1/MSWEP_resampling_4326.nc"))
+MSWEP = MSWEP[[134:3444]]
+res(MSWEP)
+nlayers(MSWEP)
 
-DEM = raster(paste0(directory, "/MDT_10K.tif"))
+DEM = raster(paste0(directory, "/Img_0.1/Area_LocalDEM_resampling_4326.nc"))
 #crs(DEM) <- "+proj=longlat +datum=WGS84 +no_defs "
 res(DEM)
 
+CHIRPS = stack(paste0(directory, "/Img_0.1/CHIRPS_resampling_4326.nc"))
+CHIRPS = CHIRPS[[134:3444]]
+nlayers(CHIRPS)
 ################# Reproyeccion de todo a UTM 17S ###############################
 
 # selecciono las coordenadas de las estaciones
@@ -73,32 +74,45 @@ lat = st.coords[, "Y"]
 utmz17s.p4s <- CRS("+init=epsg:32717")
 MSWEP10KM.utm = projectRaster(from=MSWEP, crs=utmz17s.p4s)
 MSWEP10KM.utm  = raster::crop(MSWEP10KM.utm , YanuncaySHP.utm)
-MSWEP10KM.utm  = raster::mask(MSWEP10KM.utm , YanuncaySHP.utm)
+
+CHIRPS10KM.utm = projectRaster(from=CHIRPS, crs=utmz17s.p4s)
+CHIRPS10KM.utm  = raster::crop(CHIRPS10KM.utm , YanuncaySHP.utm)
+
+#MSWEP10KM.utm  = raster::mask(MSWEP10KM.utm , YanuncaySHP.utm)
+plot(MSWEP10KM.utm[[1]])
+plot(YanuncaySHP.utm, add=TRUE)
+
+plot(CHIRPS10KM.utm[[1]])
+plot(YanuncaySHP.utm, add=TRUE)
+# ------------------------------------------------------------------------------
 crs(MSWEP10KM.utm)
 
 YanuncayDEM.utm = projectRaster(from=DEM, crs=utmz17s.p4s)
 YanuncayDEM.utm = raster::crop(YanuncayDEM.utm, YanuncaySHP.utm)
-YanuncayDEM.utm =  raster::mask(YanuncayDEM.utm, YanuncaySHP.utm)
+#YanuncayDEM.utm =  raster::mask(YanuncayDEM.utm, YanuncaySHP.utm)
 res(YanuncayDEM.utm)
 
-ref = MSWEP10KM.utm[[1]]
-res(ref)
-YanuncayDEM.utm = raster::resample(YanuncayDEM.utm, ref, method = "ngb")
-res(YanuncayDEM.utm)
-plot(YanuncayDEM.utm)
+# ref = MSWEP10KM.utm[[1]]
+# res(ref)
+# YanuncayDEM.utm = raster::resample(YanuncayDEM.utm, ref, method = "ngb")
+# res(YanuncayDEM.utm)
+# plot(YanuncayDEM.utm)
 
-
+# ------------------------------------------------------------------------------
 YanuncayPPgis.utm = data.frame(ID=stations.utm[["Code"]], lon=lon, lat=lat)
 
-covariates.utm = list(mswep=MSWEP10KM.utm, 
+covariates.utm = list(mswep=MSWEP10KM.utm, chirps=CHIRPS10KM.utm,
                        dem=YanuncayDEM.utm)
 
 rfmep = RFmerge(x=YanuncayPPts, metadata=YanuncayPPgis.utm, cov=covariates.utm,
                  id="ID", lat="lat", lon="lon",  mask=YanuncaySHP.utm, 
                  training=0.8, write2disk=FALSE)
 
+plot(rfmep[[1]])
+plot(YanuncaySHP.utm, add=TRUE)
+
 # ------------------------------------------------------------------------------
 # Guardo el modelo
-setwd("C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Scripts R/Randon_Forest")
-save(rfmep, file = "rfmep.RData")
-raster::writeRaster(rfmep, filename="RFMEP_1C.nc", format="CDF", overwrite=TRUE)
+setwd("C:/Users/Jonna/Desktop/Randon_Forest/AlgoritmoRF/Img_0.1")
+save(rfmep, file = "rfmepMSCH.RData")
+raster::writeRaster(rfmep, filename="ModeloCMD_01.nc", format="CDF", overwrite=TRUE)
