@@ -3,47 +3,77 @@ library(raster)
 library(terra)
 library(sf)
 library(raster)
+library(ncdf4)
 
-setwd("C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Datos Satelitales/Img_Sat")
 
+# Proceso Imagenes satelitales MSWEP -------------------------------------------
+setwd("C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Datos Satelitales/Chirps")
 data.file.name= list.files("./",full.names =T,pattern = ".nc" )
 data.file.name 
 
-dat.stck= stack(data.file.name)
-crs(dat.stck)= crs("+init=epsg:4326")
-dat.stck
-plot(dat.stck[[9]])
+CHIRPS = stack(data.file.name)
+res(CHIRPS)
+#CHIRPS = projectRaster(CHIRPS, crs = 4326)
+# res(CHIRPS)
+# dat.stck
 
-directory_shape = "C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Shapes/Cuenca Yanuncay/Cuenca_Yanuncay/Cuenca_Yanuncay.shp"
-#directory_shape = "C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Datos Satelitales/Shape_Base/AREA_LOCAL.shp"
-ROI = st_read(directory_shape)
-ROI = st_transform(ROI, CRS("+proj=longlat +datum=WGS84"))
-plot(ROI)
+# Cargo el shape de la Area Local
+Area_LocalSHP = st_read("C:/Users/Jonna/Desktop/Randon_Forest/Shape_AreaLocal/AREA_LOCAL.shp")
+Area_LocalSHP = st_transform(Area_LocalSHP, crs = 4326)
+plot(Area_LocalSHP)
 
-dat.stck= raster::crop(dat.stck,ROI)
-plot(dat.stck[[9]])
-nlayers(dat.stck)
-res_fin= c(0.0898311174, 0.0898311174)
-
-new_raster= raster(res = res_fin, crs = crs(dat.stck), ext = extent(dat.stck ))
-
-# Realiza el remuestreo utilizando el método de interpolación "bilinear"
-resampled_brick= resample(dat.stck, y = new_raster, method = "bilinear")
-resampled_brick
-nlayers(resampled_brick)
-plot(resampled_brick[[9]])
-
-coor <- data.frame(lon=-79.3,lat= -3)
-plot(resampled_brick[[9]])+
-  points(coor)
+# Cargo el DEM de la Area Local
+dat.stck = stack("C:/Users/Jonna/Desktop/Randon_Forest/AlgoritmoRF/Img_0.1/MSWEP_resampling_4326.nc")
+res(dat.stck)
+#dat.stck = projectRaster(dat.stck, crs = 4326)
+plot(dat.stck[[1]])
+plot(dat.stck, add = TRUE)
 
 
-test1 <- raster::extract(resampled_brick,coor)
-test1 <- as.data.frame(t(test1))
-test1$id <- c(1:length(data.file.name))
-View(test1)
+# Recorto las imagenes satelitales en funcion del Area Local
+# dat.stck = raster::crop(dat.stck, Area_LocalSHP)
+# plot(dat.stck[[1]])
+# dat.stck = projectRaster(dat.stck, crs = 4326)
+# res(dat.stck)
 
-output_file = "C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Scripts R/Randon_Forest/YanuncaySatResampling.nc"
+CHIRPS = raster::crop(CHIRPS, Area_LocalSHP)
+CHIRPS = projectRaster(CHIRPS, crs = 4326)
+plot(CHIRPS[[1]])
 
-# Guardar el SpatRasterBrick en formato NetCDF
-writeRaster(resampled_brick, filename = output_file, format = "CDF", overwrite = TRUE)
+# Resampleo a 0.1 grados
+# ref = dat.stck[[1]]
+# Area_LocalDEM = raster::resample(DEM, ref, method = "ngb")
+# plot(Area_LocalDEM)
+# res(Area_LocalDEM)
+
+
+# Convierto a UTM para verificar 
+# utmz17s = CRS("+init=epsg:32717")
+# dat.stck.UTM = projectRaster(from = dat.stck, crs = utmz17s)
+# res(dat.stck.UTM)
+# 
+# Area_LocalDEM.UTM = projectRaster(from = Area_LocalDEM, crs = utmz17s)
+# res(Area_LocalDEM.UTM)
+
+
+
+############ Repeoyecto a 10 km ############
+setwd("C:/Users/Jonna/Desktop/Randon_Forest/AlgoritmoRF/Img_0.1")
+
+res_fin= c(0.09, 0.09)
+new_raster = raster(res = res_fin, crs = crs(dat.stck), ext = extent(dat.stck))
+
+Area_LocalDEM_resampling = resample(DEM, y = new_raster, method = "ngb")
+res(Area_LocalDEM_resampling)
+raster::writeRaster(Area_LocalDEM_resampling, filename="Area_LocalDEM_resampling_4326.nc", format="CDF", overwrite=TRUE)
+# guardo el raster
+
+WMSWEP = resample(dat.stck, y = new_raster, method = "ngb")
+res(WMSWEP)
+raster::writeRaster(WMSWEP, filename="MSWEP_resampling_4326.nc", format="CDF", overwrite=TRUE)
+
+CHIRPS = resample(CHIRPS, y = new_raster, method = "ngb")
+res(CHIRPS)
+plot(CHIRPS[[1]])
+raster::writeRaster(CHIRPS, filename="CHIRPS_resampling_4326.nc", format="CDF", overwrite=TRUE)
+
