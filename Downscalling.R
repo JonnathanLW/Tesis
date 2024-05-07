@@ -168,54 +168,6 @@ rename = function(data) {
   return(data)
 }
 
-mapeo.cuantil_Bias = function(data.obser, data.satelit){
-  
-  # data.obser = data.B_S
-  # data.satelit = micro.Bermejos
-  
-  names(data.obser) = c("Fecha", "prec")
-  names(data.satelit) = c("Fecha", "prec")
-  
-  mapeo = ecdf(data.obser$prec)
-  mapeo.cuantil = quantile(data.satelit$prec, probs = mapeo(data.satelit$prec))
-  data.satelit$prec_cuantil =  mapeo.cuantil
-  
-  data.merge = merge(data.obser, data.satelit, by = "Fecha")
-  names(data.merge) = c("Fecha", "prec", "prec_sat", "prec_cuantil")
-  estadistico.cuant = gof(data.merge$prec_cuantil, data.merge$prec)
-  estadisticos.sat = gof(data.merge$prec_sat, data.merge$prec)
-  
-  estadistico.cuant = data.frame(estadistico.cuant)
-  estadistico.sat = data.frame(estadisticos.sat)
-
-  names = rownames(estadistico.cuant)
-  names = data.frame(names)
-  
-  estadisticos.f = cbind(names, estadistico.cuant[,1], estadistico.sat[,1])
-  names(estadisticos.f) = c("Estadistico", "prec_Cuantil", "prec_Satelital")
-  # Corrijo Bias de los datos satelitales y prec)cuanti
-  bias.ind = which(estadisticos.f$Estadistico == "PBIAS %")
-  values.bias = estadisticos.f[bias.ind,]
-  
-  bias.cuantil = 1 - (values.bias$prec_Cuantil / 100)
-  bias.sat = 1 - (values.bias$prec_Satelital / 100)
-  
-  data.merge$prec_CuantilBias = data.merge$prec_cuantil * bias.cuantil
-  data.merge$prec_SatBias = data.merge$prec_sat * bias.sat
-  
-  estadistico.cuantB = gof(data.merge$prec_CuantilBias, data.merge$prec)
-  estadisticos.satB = gof(data.merge$prec_SatBias, data.merge$prec)
-  
-  estadistico.cuantB = data.frame(estadistico.cuantB)
-  estadisticos.satB = data.frame(estadisticos.satB)
-  
-  estadisticos.f = cbind(estadisticos.f , estadistico.cuantB[,1], estadisticos.satB[,1])
-  names(estadisticos.f) = c("Estadistico", "prec_Cuantil", "prec_Satelital", "prec_CuantilBias", "prec_SatBias")
-  Estadisticos_CB <<- estadisticos.f
-  return(data.merge)
-}
-
-
 ######################### Validación cruzada con k folds #######################
 n = 10 # número de folds
 validacion.cruzada = function(data.obs, name.micro, name.fc, promedio.micro){
@@ -354,6 +306,52 @@ evaluacion.final = function(rest.validation, best.factor, data.crudo) {
 }
 
 ###################### Corrección del sesgo (Mapeo de cuantiles) ###############
+mapeo.cuantil_Bias = function(data.obser, data.satelit){
+  
+  # data.obser = data.B_S
+  # data.satelit = micro.Bermejos
+  
+  names(data.obser) = c("Fecha", "prec")
+  names(data.satelit) = c("Fecha", "prec")
+  
+  mapeo = ecdf(data.obser$prec)
+  mapeo.cuantil = quantile(data.satelit$prec, probs = mapeo(data.satelit$prec))
+  data.satelit$prec_cuantil =  mapeo.cuantil
+  
+  data.merge = merge(data.obser, data.satelit, by = "Fecha")
+  names(data.merge) = c("Fecha", "prec", "prec_sat", "prec_cuantil")
+  estadistico.cuant = gof(data.merge$prec_cuantil, data.merge$prec)
+  estadisticos.sat = gof(data.merge$prec_sat, data.merge$prec)
+  
+  estadistico.cuant = data.frame(estadistico.cuant)
+  estadistico.sat = data.frame(estadisticos.sat)
+  
+  names = rownames(estadistico.cuant)
+  names = data.frame(names)
+  
+  estadisticos.f = cbind(names, estadistico.cuant[,1], estadistico.sat[,1])
+  names(estadisticos.f) = c("Estadistico", "prec_Cuantil", "prec_Satelital")
+  # Corrijo Bias de los datos satelitales y prec)cuanti
+  bias.ind = which(estadisticos.f$Estadistico == "PBIAS %")
+  values.bias = estadisticos.f[bias.ind,]
+  
+  bias.cuantil = 1 - (values.bias$prec_Cuantil / 100)
+  bias.sat = 1 - (values.bias$prec_Satelital / 100)
+  
+  data.merge$prec_CuantilBias = data.merge$prec_cuantil * bias.cuantil
+  data.merge$prec_SatBias = data.merge$prec_sat * bias.sat
+  
+  estadistico.cuantB = gof(data.merge$prec_CuantilBias, data.merge$prec)
+  estadisticos.satB = gof(data.merge$prec_SatBias, data.merge$prec)
+  
+  estadistico.cuantB = data.frame(estadistico.cuantB)
+  estadisticos.satB = data.frame(estadisticos.satB)
+  
+  estadisticos.f = cbind(estadisticos.f , estadistico.cuantB[,1], estadisticos.satB[,1])
+  names(estadisticos.f) = c("Estadistico", "prec_Cuantil", "prec_Satelital", "prec_CuantilBias", "prec_SatBias")
+  Estadisticos_CB <<- estadisticos.f
+  return(data.merge)
+}
 # ------------------------------------------------------------------------------
 
 # ------------------------------------------------------------------------------
