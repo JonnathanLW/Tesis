@@ -111,7 +111,8 @@ dia.juliano = function(df) {
   }
 
 promedio.diaJuliano = function(df) {
-  df = df %>% select(dia_juliano, promedio)
+  df = data.frame(df)
+  df = df %>% dplyr::select(dia_juliano, promedio)
   model = as.matrix(df)
   prom.day = array(0,dim=c(1,365))
   
@@ -121,7 +122,8 @@ promedio.diaJuliano = function(df) {
   return(prom.day)
 }
 
-factores.correcion = function(prom.obs,prom.sat, name ){
+factores.correcion = function(prom.obs,prom.sat, name){
+  
   fact_correc = array(0,dim=c(1,365))
   last_value = NA
   for (i in 1:365) {
@@ -149,14 +151,20 @@ factores.correcion = function(prom.obs,prom.sat, name ){
 }
 
 datos.corregidos = function(data_crudo, fact_correc, name.g){
-  data_crudo = data_crudo %>% select(Fecha, dia_juliano, prec) # nomenclatura 
+  
+  # data_crudo = data.crudoBermejos
+  # fact_correc = factores
+  
+  data_crudo = data_crudo %>% dplyr::select(Fecha, dia_juliano, prec) # nomenclatura 
   data.original = data_crudo
   for (i in 1:365){
     data_crudo[data_crudo[,2]==i,3] = data_crudo[data_crudo[,2]==i,3]* fact_correc[fact_correc[,1]==i,2]
   }
+  
+  
   names(data_crudo) = c("Fecha", "dia_juliano", "prec_corregida")
   df = merge(data.original, data_crudo, by = c("Fecha"), all = TRUE)
-  df = df %>% select(Fecha, prec, prec_corregida)
+  df = df %>% dplyr::select(Fecha, prec, prec_corregida)
   direc.save = "C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Datos Satelitales/Datos_Corregidos"
  # write.csv(df, paste(direc.save, "/", name.g, ".csv", sep = ""))
   return(df)
@@ -170,14 +178,15 @@ rename = function(data) {
 
 ######################### Validación cruzada con k folds #######################
 n = 10 # número de folds
-validacion.cruzada = function(data.obs, name.micro, name.fc, promedio.micro){
+validacion.cruzada = function(data.obs, name.micro, name.fc, promedio.micro, data.crudo){
   set.seed(123)
-  # 
+
   # data.obs = data.B_S
   # name.micro = "Bermejos"
   # name.fc = "Bermejos"
   # promedio.micro = promedio.Bermejos
-  
+  # data.crudo = data.crudoBermejos
+
   data.clean = na.omit(data.obs)
   indices = sample(1:nrow(data.clean), 0.8 * nrow(data.clean))
   data.train = data.clean[indices,]
@@ -199,7 +208,8 @@ validacion.cruzada = function(data.obs, name.micro, name.fc, promedio.micro){
 
     factores = factores.correcion(promedio_train, promedio.micro, paste("FC_",name.fc, i, sep = ""))
     # any(is.na(factores)) # eliminar
-    data_corregida = datos.corregidos(data.crudoBermejos, factores, paste(name.micro, "_", i, sep = ""))
+    
+    data_corregida = datos.corregidos(data.crudo, factores, paste(name.micro, "_", i, sep = ""))
     
     
     obs_test = test$promedio
@@ -261,6 +271,10 @@ validacion.cruzada = function(data.obs, name.micro, name.fc, promedio.micro){
 }
 
 evaluacion.final = function(rest.validation, best.factor, data.crudo) {
+  
+  # rest.validation = cross.validationBERMEJOS
+  # best.factor = 1
+  # data.crudo = data.crudoBermejos
 
   #-----
   # Evaluación del modelo con datos nunca vistos ----------------------------
@@ -270,11 +284,14 @@ evaluacion.final = function(rest.validation, best.factor, data.crudo) {
   data.test = rest.validation[[best.factor]]$data.test
   data.test = rename(data.test)
   # data.test = dia.juliano(data.test) # bug encoentrado 
+  
   data_corregida_test = datos.corregidos(data.crudo, mejores_factores, "Test")
   
   # Calcular métricas de error en el conjunto de prueba
   obs_test = data.test$prec
   pred_test = data_corregida_test$prec_corregida[match(data.test$Fecha, data_corregida_test$Fecha)]
+  
+  # data_corregido.final = datos.corregidos(data.crudo, factores, paste(name.micro, "_", i, sep = ""))
   
   valid_values = complete.cases(obs_test, pred_test)
   obs_testVV = obs_test[valid_values]
@@ -301,7 +318,7 @@ evaluacion.final = function(rest.validation, best.factor, data.crudo) {
   
   GOF_final <<- test.f
 
-  return(evaluacion.final)
+  return(data_corregida_test)
   
 }
 
@@ -354,17 +371,14 @@ mapeo.cuantil_Bias = function(data.obser, data.satelit){
 }
 # ------------------------------------------------------------------------------
 
+
 # ------------------------------------------------------------------------------
 ######################## Carga de datos obs y satelitales ######################
 # Cargar datos Observados ------------------------------------------------------
 directory = "C:/Users/Jonna/Desktop/Randon_Forest/Estaciones_Tierra/Diario"
 data.Ventanas = read.csv(paste(directory, "/Ventanas.csv", sep = ""))
-data.Chaucha = read.csv(paste(directory, "/Chaucha.csv", sep = ""))
 data.Izcairrumi = read.csv(paste(directory, "/Izhcayrrumi.csv", sep = ""))
-data.SoldadosPTARM = read.csv(paste(directory, "/SoldadosPTARM.csv", sep = ""))
-data.MamamagM = read.csv(paste(directory, "/MamamagM.csv", sep = ""))
-data.Llaviucu = read.csv(paste(directory, "/Llaviucu.csv", sep = ""))
-data.CebollarPTAPM = read.csv(paste(directory, "/CebollarPTAPM.csv", sep = ""))
+
 # Cargar datos Satelitales -----------------------------------------------------
 dir.satelital = "C:/Users/Jonna/Desktop/Randon_Forest/AlgoritmoFC"
 micro.Bermejos = read.csv(paste(dir.satelital, "/Bermejos.csv", sep = ""))
@@ -372,11 +386,6 @@ micro.Bermejos$TIMESTAMP = as.Date(micro.Bermejos$TIMESTAMP, format = "%Y-%m-%d"
 datemin.sat = min(micro.Bermejos$TIMESTAMP)
 datemax.sat = max(micro.Bermejos$TIMESTAMP)
 
-
-micro.Soldados = read.csv(paste(dir.satelital, "/Soldados_crudo.csv", sep = ""))
-micro.Galgan = read.csv(paste(dir.satelital, "/Galgan_crudo.csv", sep = ""))
-micro.Quinsacocha = read.csv(paste(dir.satelital, "/Quinsacocha_crudo.csv", sep = ""))
-micro.Yanuncay = read.csv(paste(dir.satelital, "/Yanuncay_crudo.csv", sep = ""))
 # ------------------------------------------------------------------------------
 
 ################################################################################
@@ -387,17 +396,17 @@ micro.Yanuncay = read.csv(paste(dir.satelital, "/Yanuncay_crudo.csv", sep = ""))
 # Preparación de los factores de corrección de datos observados ----------------
 data.Ventanas = rename(data.Ventanas)
 data.Izcairrumi = rename(data.Izcairrumi)
-data.SoldadosPTARM = rename(data.SoldadosPTARM)
+#data.SoldadosPTARM = rename(data.SoldadosPTARM)
 
 
-data.MamamagM = rename(data.MamamagM)
+#data.MamamagM = rename(data.MamamagM)
 # Promedio de las estaciones Ventanas e Izcairrumi (Observadas)
 data.B_S = merge(data.Ventanas, data.Izcairrumi, by = "Fecha", all = TRUE)
 names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi")
-data.B_S = merge(data.B_S, data.SoldadosPTARM, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "SoldadosPTARM")
-data.B_S = merge(data.B_S, data.MamamagM, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "MamamagM")
+# data.B_S = merge(data.B_S, data.SoldadosPTARM, by = "Fecha", all = TRUE)
+# names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "SoldadosPTARM")
+# data.B_S = merge(data.B_S, data.MamamagM, by = "Fecha", all = TRUE)
+# names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "MamamagM")
 data.B_S$promedio = apply(data.B_S[,2:3], 1, mean, na.rm = TRUE)
 data.B_S = data.B_S[,c(1,4)]
 #obtener la fecha mínima donde la columna promedio no sea NA
@@ -416,100 +425,16 @@ data.Bermejos = dia.juliano(data.Bermejos)
 # promedio de los dias julianos 
 names(data.Bermejos) = c("Fecha", "promedio", "anio", "dia_juliano")
 promedio.Bermejos = promedio.diaJuliano(data.Bermejos)
-any(is.na(promedio.Bermejos)) # eliminar
 
 # Corrección de los datos satelitales de Bermejos
 data.crudoBermejos = rename(micro.Bermejos)
 data.crudoBermejos = dia.juliano(data.crudoBermejos)
 
 # Validación cruzada ------------------------------------------------------
-cross.validationBERMEJOS = validacion.cruzada(data.B_S, "Bermejos", "Bermejos", promedio.Bermejos)
-eval.BermF = evaluacion.final(cross.validationBERMEJOS, 7, data.crudoBermejos)
+cross.validationBERMEJOS = validacion.cruzada(data.B_S, "Bermejos", "Bermejos", promedio.Bermejos, data.crudoBermejos)
+eval.BermF = evaluacion.final(cross.validationBERMEJOS, 1, data.crudoBermejos)
 
-################################################################################
-# --------------------------------- Yanuncay -----------------------------------
-################################################################################
-# Preparación de los factores de corrección de datos observados ----------------
-data.MamamagM = rename(data.MamamagM)
-data.Llaviucu = rename(data.Llaviucu)
-data.CebollarPTAPM = rename(data.CebollarPTAPM)
-# Promedio de las estaciones Ventanas e Izcairrumi (Observadas)
-data.B_S = merge(data.MamamagM, data.Llaviucu, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "MamamagM", "Llaviucu")
-data.B_S = merge(data.B_S, data.CebollarPTAPM, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "MamamagM", "Llaviucu", "CebollarPTAPM")
-data.B_S$promedio = apply(data.B_S[,2:4], 1, mean, na.rm = TRUE)
-data.B_S = data.B_S[,c(1,5)]
-#obtener la fecha mínima donde la columna promedio no sea NA
-min_date = min(data.B_S$Fecha[!is.na(data.B_S$promedio)])
-data.B_S = data.B_S[data.B_S$Fecha >= min_date,]
-fecha.min = min(data.B_S$Fecha)
-fecha.max = max(data.B_S$Fecha)
-summary(data.B_S)
-# Preparo datos -----------------------------------------------------------
-#Promedio de las estaciones ventanas e Izcairrumi (Satelitales)
-data.Yanuncay = rename(micro.Yanuncay)
-data.Yanuncay = data.Yanuncay[data.Yanuncay$Fecha >= fecha.min & data.Yanuncay$Fecha <=fecha.max,]
-data.Yanuncay = dia.juliano(data.Yanuncay)
-
-# promedio de los dias julianos 
-names(data.Yanuncay) = c("Fecha", "promedio", "anio", "dia_juliano")
-promedio.Yanuncay = promedio.diaJuliano(data.Yanuncay)
-
-# Corrección de los datos satelitales de Bermejos
-data.crudoYanuncay = rename(micro.Yanuncay)
-data.crudoYanuncay = dia.juliano(data.crudoYanuncay)
-
-# Validación cruzada ------------------------------------------------------
-cross.validationYANUNCAY = validacion.cruzada(data.B_S, "Yanuncay", "Yanuncay", promedio.Yanuncay)
-modelo.f = evaluacion.final(cross.validationYANUNCAY, 5, data.crudoYanuncay)
-
-################################################################################
-# --------------------------------- Galgan -----------------------------------
-################################################################################
-data.Ventanas = rename(data.Ventanas)
-data.Izcairrumi = rename(data.Izcairrumi)
-data.Chaucha = rename(data.Chaucha)
-data.MamamagM = rename(data.MamamagM)
-data.Llaviucu = rename(data.Llaviucu)
-data.CebollarPTAPM = rename(data.CebollarPTAPM)
-# Promedio de las estaciones Ventanas e Izcairrumi (Observadas)
-data.B_S = merge(data.Ventanas, data.Izcairrumi, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi")
-data.B_S = merge(data.B_S, data.Chaucha, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "Chaucha")
-data.B_S = merge(data.B_S, data.MamamagM, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "Chaucha", "MamamagM")
-data.B_S = merge(data.B_S, data.Llaviucu, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "Chaucha", "MamamagM", "Llaviucu")
-data.B_S = merge(data.B_S, data.CebollarPTAPM, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "Chaucha", "MamamagM", "Llaviucu", "CebollarPTAPM")
-data.B_S$promedio = apply(data.B_S[,2:7], 1, mean, na.rm = TRUE)
-data.B_S = data.B_S[,c(1,8)]
-
-#obtener la fecha mínima donde la columna promedio no sea NA
-min_date = min(data.B_S$Fecha[!is.na(data.B_S$promedio)])
-data.B_S = data.B_S[data.B_S$Fecha >= min_date,]
-fecha.min = min(data.B_S$Fecha)
-fecha.max = max(data.B_S$Fecha)
-summary(data.B_S)
-# Preparo datos -----------------------------------------------------------
-#Promedio de las estaciones ventanas e Izcairrumi (Satelitales)
-data.Galgan = rename(micro.Galgan)
-data.Galgan = data.Galgan[data.Galgan$Fecha >= fecha.min & data.Galgan$Fecha <=fecha.max,]
-data.Galgan = dia.juliano(data.Galgan)
-
-
-# promedio de los dias julianos 
-names(data.Galgan) = c("Fecha", "promedio", "anio", "dia_juliano")
-promedio.Galgan = promedio.diaJuliano(data.Galgan)
-
-# Corrección de los datos satelitales de Galgan
-data.crudoGalgan = rename(micro.Galgan)
-data.crudoGalgan = dia.juliano(data.crudoGalgan)
-
-# Validación cruzada ------------------------------------------------------
-# Validación cruzada ------------------------------------------------------
-cross.validationGALGAN = validacion.cruzada(data.B_S, "Galgan", "Galgan", promedio.Galgan)
-modelo.GalgaF = evaluacion.final(cross.validationGALGAN, 5, data.crudoGalgan)
-
+# correccion por mapeo de cuantiles y bias
+data.sate = eval.BermF[,c("Fecha", "prec_corregida")]
+CuantBiasBermejos = mapeo.cuantil_Bias(data.B_S, data.sate) # con los factores de correccion 
+CuantBiasBermejos.1 = mapeo.cuantil_Bias(data.B_S, micro.Bermejos) # sin los factores de correccion
