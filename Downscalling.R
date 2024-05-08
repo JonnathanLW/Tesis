@@ -8,8 +8,6 @@ library(qmap)
 # ------------------------------------------------------------------------------
 ######################### Funciones auxiliares #################################
 dia.juliano = function(df) {
-  #df = micro.Bermejos
-  # df = rename(df)
   Fecha.1 = as.Date("2016-02-29")
   Fecha.2 = as.Date("2020-02-29")
   Fecha.3 = as.Date("2024-02-29")
@@ -117,7 +115,7 @@ promedio.diaJuliano = function(df) {
   prom.day = array(0,dim=c(1,365))
   
   for (i in 1:365){
-    prom.day[i]=median(model[model[,1]==i,2],na.rm=TRUE)
+    prom.day[i]=mean(model[model[,1]==i,2],na.rm=TRUE)
   }
   return(prom.day)
 }
@@ -152,15 +150,11 @@ factores.correcion = function(prom.obs,prom.sat, name){
 
 datos.corregidos = function(data_crudo, fact_correc, name.g){
   
-  # data_crudo = data.crudoBermejos
-  # fact_correc = factores
-  
   data_crudo = data_crudo %>% dplyr::select(Fecha, dia_juliano, prec) # nomenclatura 
   data.original = data_crudo
   for (i in 1:365){
     data_crudo[data_crudo[,2]==i,3] = data_crudo[data_crudo[,2]==i,3]* fact_correc[fact_correc[,1]==i,2]
   }
-  
   
   names(data_crudo) = c("Fecha", "dia_juliano", "prec_corregida")
   df = merge(data.original, data_crudo, by = c("Fecha"), all = TRUE)
@@ -325,9 +319,6 @@ evaluacion.final = function(rest.validation, best.factor, data.crudo) {
 ###################### Corrección del sesgo (Mapeo de cuantiles) ###############
 mapeo.cuantil_Bias = function(data.obser, data.satelit){
   
-  # data.obser = data.B_S
-  # data.satelit = micro.Bermejos
-  
   names(data.obser) = c("Fecha", "prec")
   names(data.satelit) = c("Fecha", "prec")
   
@@ -370,8 +361,9 @@ mapeo.cuantil_Bias = function(data.obser, data.satelit){
   return(data.merge)
 }
 # ------------------------------------------------------------------------------
-
-
+################################################################################
+################################################################################
+################### Cálculos para las micro cuencas Bermejos ###################
 # ------------------------------------------------------------------------------
 ######################## Carga de datos obs y satelitales ######################
 # Cargar datos Observados ------------------------------------------------------
@@ -387,11 +379,76 @@ datemin.sat = min(micro.Bermejos$TIMESTAMP)
 datemax.sat = max(micro.Bermejos$TIMESTAMP)
 
 # ------------------------------------------------------------------------------
+# -------------------------------Bermejos Soldados -----------------------------
+# Preparación de los factores de corrección de datos observados ----------------
+data.Ventanas = rename(data.Ventanas)
+data.Izcairrumi = rename(data.Izcairrumi)
+#data.SoldadosPTARM = rename(data.SoldadosPTARM)
 
+
+#data.MamamagM = rename(data.MamamagM)
+# Promedio de las estaciones Ventanas e Izcairrumi (Observadas)
+data.B_S = merge(data.Ventanas, data.Izcairrumi, by = "Fecha", all = TRUE)
+names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi")
+# data.B_S = merge(data.B_S, data.SoldadosPTARM, by = "Fecha", all = TRUE)
+# names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "SoldadosPTARM")
+# data.B_S = merge(data.B_S, data.MamamagM, by = "Fecha", all = TRUE)
+# names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "MamamagM")
+data.B_S$promedio = apply(data.B_S[,2:3], 1, mean, na.rm = TRUE)
+data.B_S = data.B_S[,c(1,4)]
+#obtener la fecha mínima donde la columna promedio no sea NA
+min_date = min(data.B_S$Fecha[!is.na(data.B_S$promedio)])
+data.B_S = data.B_S[data.B_S$Fecha >= min_date,]
+fecha.min = min(data.B_S$Fecha)
+fecha.max = max(data.B_S$Fecha)
+summary(data.B_S)
+data.B_S = data.B_S[data.B_S$Fecha >= datemin.sat & data.B_S$Fecha <=datemax.sat,]
+# Preparo datos -----------------------------------------------------------
+#Promedio de las estaciones ventanas e Izcairrumi (Satelitales)
+data.Bermejos = rename(micro.Bermejos)
+data.Bermejos = data.Bermejos[data.Bermejos$Fecha >= fecha.min & data.Bermejos$Fecha <=fecha.max,]
+data.Bermejos = dia.juliano(data.Bermejos)
+
+# promedio de los dias julianos 
+names(data.Bermejos) = c("Fecha", "promedio", "anio", "dia_juliano")
+promedio.Bermejos = promedio.diaJuliano(data.Bermejos)
+
+# Corrección de los datos satelitales de Bermejos
+data.crudoBermejos = rename(micro.Bermejos)
+data.crudoBermejos = dia.juliano(data.crudoBermejos)
+
+# Validación cruzada ------------------------------------------------------
+cross.validationBERMEJOS = validacion.cruzada(data.B_S, "Bermejos", "Bermejos", promedio.Bermejos, data.crudoBermejos)
+eval.BermF = evaluacion.final(cross.validationBERMEJOS, 1, data.crudoBermejos)
+
+# correccion por mapeo de cuantiles y bias
+data.sate = eval.BermF[,c("Fecha", "prec_corregida")]
+CuantBiasBermejos = mapeo.cuantil_Bias(data.B_S, data.sate) # con los factores de correccion 
+CuantBiasBermejos.1 = mapeo.cuantil_Bias(data.B_S, micro.Bermejos) # sin los factores de correccion
+
+# ------------------------------------------------------------------------------
 ################################################################################
 ################################################################################
-########################### Cálculos para las micro cuencas #####################
+################### Cálculos para las micro cuencas Galgan ###################
+# ------------------------------------------------------------------------------
+######################## Carga de datos obs y satelitales ######################
+# Cargar datos Observados ------------------------------------------------------
+directory = "C:/Users/Jonna/Desktop/Randon_Forest/Estaciones_Tierra/Diario"
+data.Cancan = read.csv(paste(directory, "/Cancan.csv", sep = ""))
+data.Cancan$TIMESTAMP = as.Date(data.Cancan$TIMESTAMP, format = "%Y-%m-%d")
+min.cancan = min(data.Cancan$TIMESTAMP)
+max.cancan = max(data.Cancan$TIMESTAMP)
 
+# Cargar datos Satelitales -----------------------------------------------------
+dir.satelital = "C:/Users/Jonna/Desktop/Randon_Forest/AlgoritmoFC"
+micro.Bermejos = read.csv(paste(dir.satelital, "/Galgan.csv", sep = ""))
+micro.Bermejos$TIMESTAMP = as.Date(micro.Bermejos$TIMESTAMP, format = "%Y-%m-%d")
+datemin.sat = min(micro.Bermejos$TIMESTAMP)
+datemax.sat = max(micro.Bermejos$TIMESTAMP)
+
+micro.Bermejos = micro.Bermejos[micro.Bermejos$TIMESTAMP >= min.cancan & micro.Bermejos$TIMESTAMP <= max.cancan,]
+
+# ------------------------------------------------------------------------------
 # -------------------------------Bermejos Soldados -----------------------------
 # Preparación de los factores de corrección de datos observados ----------------
 data.Ventanas = rename(data.Ventanas)
