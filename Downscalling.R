@@ -115,7 +115,7 @@ promedio.diaJuliano = function(df) {
   prom.day = array(0,dim=c(1,365))
   
   for (i in 1:365){
-    prom.day[i]=mean(model[model[,1]==i,2],na.rm=TRUE)
+    prom.day[i]=median(model[model[,1]==i,2],na.rm=TRUE) # cambiar por median = mediana, mean = promedio
   }
   return(prom.day)
 }
@@ -143,7 +143,7 @@ factores.correcion = function(prom.obs,prom.sat, name){
   fact_correc = as.data.frame(fact_correc)
   
   names(fact_correc) = c("dia_juliano", "factor_correcion")
-  directory.save_fc = "C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Datos Satelitales/Factores de corrección"
+  # directory.save_fc = "C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Datos Satelitales/Factores de corrección"
  # write.csv(fact_correc, paste(directory.save_fc, "/", name, ".csv", sep = ""))
   return(fact_correc)
 }
@@ -159,7 +159,7 @@ datos.corregidos = function(data_crudo, fact_correc, name.g){
   names(data_crudo) = c("Fecha", "dia_juliano", "prec_corregida")
   df = merge(data.original, data_crudo, by = c("Fecha"), all = TRUE)
   df = df %>% dplyr::select(Fecha, prec, prec_corregida)
-  direc.save = "C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Datos Satelitales/Datos_Corregidos"
+  # direc.save = "C:/Users/Jonna/OneDrive - ucuenca.edu.ec/Universidad/Tesis/Datos Satelitales/Datos_Corregidos"
  # write.csv(df, paste(direc.save, "/", name.g, ".csv", sep = ""))
   return(df)
 }
@@ -373,8 +373,9 @@ data.Izcairrumi = read.csv(paste(directory, "/Izhcayrrumi.csv", sep = ""))
 
 # Cargar datos Satelitales -----------------------------------------------------
 dir.satelital = "C:/Users/Jonna/Desktop/Randon_Forest/AlgoritmoFC"
-micro.Bermejos = read.csv(paste(dir.satelital, "/Bermejos.csv", sep = ""))
+micro.Bermejos = read.csv(paste(dir.satelital, "/Bermejos.csv", sep = "")) # Probar con MSWEP puro y el MSWEP RANDON FOREST
 micro.Bermejos$TIMESTAMP = as.Date(micro.Bermejos$TIMESTAMP, format = "%Y-%m-%d")
+
 datemin.sat = min(micro.Bermejos$TIMESTAMP)
 datemax.sat = max(micro.Bermejos$TIMESTAMP)
 
@@ -390,6 +391,7 @@ data.Izcairrumi = rename(data.Izcairrumi)
 # Promedio de las estaciones Ventanas e Izcairrumi (Observadas)
 data.B_S = merge(data.Ventanas, data.Izcairrumi, by = "Fecha", all = TRUE)
 names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi")
+
 # data.B_S = merge(data.B_S, data.SoldadosPTARM, by = "Fecha", all = TRUE)
 # names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "SoldadosPTARM")
 # data.B_S = merge(data.B_S, data.MamamagM, by = "Fecha", all = TRUE)
@@ -399,14 +401,14 @@ data.B_S = data.B_S[,c(1,4)]
 #obtener la fecha mínima donde la columna promedio no sea NA
 min_date = min(data.B_S$Fecha[!is.na(data.B_S$promedio)])
 data.B_S = data.B_S[data.B_S$Fecha >= min_date,]
-fecha.min = min(data.B_S$Fecha)
-fecha.max = max(data.B_S$Fecha)
+# fecha.min = min(data.B_S$Fecha)
+# fecha.max = max(data.B_S$Fecha)
 summary(data.B_S)
 data.B_S = data.B_S[data.B_S$Fecha >= datemin.sat & data.B_S$Fecha <=datemax.sat,]
 # Preparo datos -----------------------------------------------------------
 #Promedio de las estaciones ventanas e Izcairrumi (Satelitales)
 data.Bermejos = rename(micro.Bermejos)
-data.Bermejos = data.Bermejos[data.Bermejos$Fecha >= fecha.min & data.Bermejos$Fecha <=fecha.max,]
+# data.Bermejos = data.Bermejos[data.Bermejos$Fecha >= fecha.min & data.Bermejos$Fecha <=fecha.max,]
 data.Bermejos = dia.juliano(data.Bermejos)
 
 # promedio de los dias julianos 
@@ -419,12 +421,19 @@ data.crudoBermejos = dia.juliano(data.crudoBermejos)
 
 # Validación cruzada ------------------------------------------------------
 cross.validationBERMEJOS = validacion.cruzada(data.B_S, "Bermejos", "Bermejos", promedio.Bermejos, data.crudoBermejos)
-eval.BermF = evaluacion.final(cross.validationBERMEJOS, 1, data.crudoBermejos)
+
+#Datos RF-Merge (Validación con datos no vistos)
+eval.BermF = evaluacion.final(cross.validationBERMEJOS, 1, data.crudoBermejos) # el numero es el fold que se quiere evaluar
 
 # correccion por mapeo de cuantiles y bias
 data.sate = eval.BermF[,c("Fecha", "prec_corregida")]
-CuantBiasBermejos = mapeo.cuantil_Bias(data.B_S, data.sate) # con los factores de correccion 
+CuantBiasBermejos = mapeo.cuantil_Bias(data.B_S, data.sate) # con los factores de corrección 
+
 CuantBiasBermejos.1 = mapeo.cuantil_Bias(data.B_S, micro.Bermejos) # sin los factores de correccion
+
+
+
+
 
 # ------------------------------------------------------------------------------
 ################################################################################
