@@ -115,7 +115,7 @@ promedio.diaJuliano = function(df) {
   prom.day = array(0,dim=c(1,365))
   
   for (i in 1:365){
-    prom.day[i]=median(model[model[,1]==i,2],na.rm=TRUE) # cambiar por median = mediana, mean = promedio
+    prom.day[i]=mean(model[model[,1]==i,2],na.rm=TRUE) # cambiar por median = mediana, mean = promedio
   }
   return(prom.day)
 }
@@ -369,11 +369,15 @@ mapeo.cuantil_Bias = function(data.obser, data.satelit){
 # Cargar datos Observados ------------------------------------------------------
 directory = "C:/Users/Jonna/Desktop/Randon_Forest/Estaciones_Tierra/Diario"
 data.Ventanas = read.csv(paste(directory, "/Ventanas.csv", sep = ""))
+data.Yanuncaypucan = read.csv(paste(directory, "/YanuncayPucan.csv", sep = ""))
 data.Izcairrumi = read.csv(paste(directory, "/Izhcayrrumi.csv", sep = ""))
+data.SoldadosPTARM = read.csv(paste(directory, "/SoldadosPTARM.csv", sep = ""))
+# data.patoquinuas = read.csv(paste(directory, "/Patoquinuas.csv", sep = "")
+# data.Yanuncaypucan = data.Yanuncaypucan[data.Yanuncaypucan$prec < 500,]
 
 # Cargar datos Satelitales -----------------------------------------------------
-dir.satelital = "C:/Users/Jonna/Desktop/Randon_Forest/AlgoritmoFC"
-micro.Bermejos = read.csv(paste(dir.satelital, "/Bermejos.csv", sep = "")) # Probar con MSWEP puro y el MSWEP RANDON FOREST
+dir.satelital = "C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_2/Downscalling/prec_microSatel"
+micro.Bermejos = read.csv(paste(dir.satelital, "/Micro_Bermejos.csv", sep = "")) # Probar con MSWEP puro y el MSWEP RANDON FOREST
 micro.Bermejos$TIMESTAMP = as.Date(micro.Bermejos$TIMESTAMP, format = "%Y-%m-%d")
 
 datemin.sat = min(micro.Bermejos$TIMESTAMP)
@@ -384,6 +388,16 @@ datemax.sat = max(micro.Bermejos$TIMESTAMP)
 # Preparación de los factores de corrección de datos observados ----------------
 data.Ventanas = rename(data.Ventanas)
 data.Izcairrumi = rename(data.Izcairrumi)
+data.Yanuncaypucan = rename(data.Yanuncaypucan)
+data.SoldadosPTARM = rename(data.SoldadosPTARM)
+
+summary(data.SoldadosPTARM)
+data.SoldadosPTARM = data.SoldadosPTARM[!is.na(data.SoldadosPTARM$Fecha),]
+summary(data.SoldadosPTARM)
+summary(data.Yanuncaypucan)
+data.Yanuncaypucan$prec = replace(data.Yanuncaypucan$prec, data.Yanuncaypucan$prec > 500, NA)
+summary(data.Yanuncaypucan)
+# data.patoquinuas = rename(data.patoquinuas)
 #data.SoldadosPTARM = rename(data.SoldadosPTARM)
 
 
@@ -391,13 +405,23 @@ data.Izcairrumi = rename(data.Izcairrumi)
 # Promedio de las estaciones Ventanas e Izcairrumi (Observadas)
 data.B_S = merge(data.Ventanas, data.Izcairrumi, by = "Fecha", all = TRUE)
 names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi")
+data.B_S = merge(data.B_S, data.Yanuncaypucan, by = "Fecha", all = TRUE)
+names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "Yanuncaypucan")
+data.B_S = merge(data.B_S, data.SoldadosPTARM, by = "Fecha", all = TRUE)
+names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "Yanuncaypucan", "SoldadosPTARM")
+summary(data.B_S)
+
+names(data.B_S) = c("Fecha", "Mamamag", "Llaviuco")
+data.B_S = merge(data.B_S, data.patoquinuas, by = "Fecha", all = TRUE)
+data.B_S = data.B_S[!is.na(data.B_S$Fecha),]
+# names(data.B_S) = c("Fecha", "Mamamag", "Llaviuco", "Patoquinuas")
 
 # data.B_S = merge(data.B_S, data.SoldadosPTARM, by = "Fecha", all = TRUE)
 # names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "SoldadosPTARM")
 # data.B_S = merge(data.B_S, data.MamamagM, by = "Fecha", all = TRUE)
 # names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "MamamagM")
-data.B_S$promedio = apply(data.B_S[,2:3], 1, mean, na.rm = TRUE)
-data.B_S = data.B_S[,c(1,4)]
+data.B_S$promedio = apply(data.B_S[,2:4], 1, mean, na.rm = TRUE)
+data.B_S = data.B_S[,c(1,5)]
 #obtener la fecha mínima donde la columna promedio no sea NA
 min_date = min(data.B_S$Fecha[!is.na(data.B_S$promedio)])
 data.B_S = data.B_S[data.B_S$Fecha >= min_date,]
@@ -431,5 +455,6 @@ CuantBiasBermejos = mapeo.cuantil_Bias(data.B_S, data.sate) # con los factores d
 
 CuantBiasBermejos.1 = mapeo.cuantil_Bias(data.B_S, micro.Bermejos) # sin los factores de correccion
 
-
-
+directory = "C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_2/Curvas_Doblemasa"
+df.save = CuantBiasBermejos.1[,c(1,6)]
+write.csv(df.save, paste(directory, "/Micro_Bermejos.csv", sep = ""))
