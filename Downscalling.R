@@ -1,11 +1,19 @@
-# Liberias necesarias ----------------------------------------------------------
+################################# Downscalling #################################
+# ------------------------------------------------------------------------------
+# Fecha ultima modificación: 2024-02-09 (año-mes-día)
+# Versión: 3.0.0
+# ------------------------------------------------------------------------------
+################################################################################
+# Librerías necesarias ---------------------------------------------------------
 library(dplyr)
 library(hydroGOF)
 library(caret)
 library(qmap)
-
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
+################################################################################
+################################################################################
+################################################################################
 ######################### Funciones auxiliares #################################
 dia.juliano = function(df) {
   Fecha.1 = as.Date("2016-02-29")
@@ -319,26 +327,147 @@ evaluacion.final = function(rest.validation, best.factor, data.crudo) {
 ###################### Corrección del sesgo (Mapeo de cuantiles) ###############
 mapeo.cuantil_Bias = function(data.obser, data.satelit){
   
+  # # temporal
+  # data.obser = data.B_S
+  # data.satelit = micro.Bermejos
+
   names(data.obser) = c("Fecha", "prec")
   names(data.satelit) = c("Fecha", "prec")
   
-  mapeo = ecdf(data.obser$prec)
-  mapeo.cuantil = quantile(data.satelit$prec, probs = mapeo(data.satelit$prec))
-  data.satelit$prec_cuantil =  mapeo.cuantil
+  # MAPEO DE CUANTILES CON CROSS VALIDATION
+  set.seed(123)
+  datos = merge(data.obser, data.satelit, by = "Fecha", all = TRUE)
+  names(datos) = c("Fecha", "obs", "mod")
+  train = na.omit(datos)
   
-  data.merge = merge(data.obser, data.satelit, by = "Fecha")
-  names(data.merge) = c("Fecha", "prec", "prec_sat", "prec_cuantil")
-  estadistico.cuant = gof(data.merge$prec_cuantil, data.merge$prec)
-  estadisticos.sat = gof(data.merge$prec_sat, data.merge$prec)
+  indices = sample(1:nrow(train), 0.8 * nrow(train))
+  data.train = train[indices,]
+  data.test = train[-indices,]
   
-  estadistico.cuant = data.frame(estadistico.cuant)
-  estadistico.sat = data.frame(estadisticos.sat)
+  folds = createFolds(data.train$obs, k = 5, list = TRUE, returnTrain = TRUE)
+  resultados = list()
+  n = 5
+  for (i in 1:n){
+    train = data.train[folds[[i]],]
+    test = data.train[-folds[[i]],]
+    Fecha = test$Fecha
+    Fecha = as.Date(Fecha, format = "%Y-%m-%d")
+    Fecha = data.frame(Fecha)
+    
+    qm_fit = fitQmap(train$obs, train$mod, method = "QUANT")
+    qm1 = doQmap(train$mod, qm_fit)
+    qm2 = doQmap(test$mod, qm_fit)
+    
+    obs_test = test$obs
+    pred_test = qm2
+    data.merge = cbind(Fecha, obs_test, pred_test)
   
-  names = rownames(estadistico.cuant)
-  names = data.frame(names)
+    test = gof(pred_test, obs_test)
+    test = data.frame(test)
+    names(test) = "valor"
+    # Crear un nuevo marco de datos con los nombres de las filas como una columna
+    test.f = cbind(Estadistico = rownames(test), test)
+    rownames(test.f)  = NULL
+    resultados[[i]] = list(data.test = data.test, train = train, test = test, test.f = test.f, qm_fit = qm_fit)
+  }
   
-  estadisticos.f = cbind(names, estadistico.cuant[,1], estadistico.sat[,1])
-  names(estadisticos.f) = c("Estadistico", "prec_Cuantil", "prec_Satelital")
+  gof_lista = list()
+  
+  # Calcular gof para cada iteración y almacenar los resultados en la lista
+  for (i in 1:n) {
+    test = resultados[[i]]$test
+    gof_lista[[paste("Fold", i)]] = test
+  }
+  
+  # Combinar los resultados en un único marco de datos
+  gof_df = do.call(cbind, gof_lista)
+  gof_df = as.data.frame(gof_df)
+  colnames(gof_df) = paste("Fold", 1:n, sep = "_")
+  gof_CB <<- gof_df
+  return(resultados)
+}
+
+
+prueba = mapeo.cuantil_Bias(data.B_S, micro.Bermejos)
+fold_4 = prueba[[5]]
+fold_4$qm_fit
+predicciones = doQmap(micro.Bermejos$promedio, fold_4$qm_fit)
+data.f = cbind(micro.Bermejos$promedio, predicciones)
+Fecha = as.data.frame(micro.Bermejos$TIMESTAMP)
+data.f = data.frame(cbind(Fecha, data.f))
+names(data.f) = c("Fecha", "obs", "mod")
+test = gof(data.f$mod, data.f$obs)
+factor = 1 - (25.00 / 100)
+data.f$cor = data.f$mod * factor
+gof(data.f$cor, data.f$obs)
+
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  # 
+  # ctrl = trainControl(method = "cv", number = 5)
+  # 
+  # # Función de preprocesamiento para aplicar QM
+  # preProcess_qm = function(datos) {
+  #   datos_calib = datos[datos$Resample == "Train", ]
+  #   qm_fit = fitQmap(datos_calib$obs, datos_calib$mod, method = "QUANT")
+  #   return(qm_fit)
+  # }
+  # 
+  # # Función para aplicar el mapeo de cuantiles
+  # aplicar_qm = function(objeto, nuevos_datos) {
+  #   map(nuevos_datos$mod, doQmap, objeto)
+  # }
+  # 
+  # preProcess_qm_caret <- preProcess(train, method = preProcess_qm, aplicar_qm)
+  # 
+  # 
+  # # Entrenar el modelo de mapeo de cuantiles
+  # 
+  # qm_model = train(mod ~ obs, data = datos.completos, method = preProcess_qm_caret, 
+  #                  trControl = ctrl)
+  # 
+  # 
+  # mod_corregido = predict(qm_model, datos)
+  # 
+  # mapeo = ecdf(data.obser$prec)
+  # mapeo.cuantil = quantile(data.satelit$prec, probs = mapeo(data.satelit$prec))
+  # data.satelit$prec_cuantil =  mapeo.cuantil
+  # 
+  # data.merge = merge(data.obser, data.satelit, by = "Fecha")
+  # names(data.merge) = c("Fecha", "prec", "prec_sat", "prec_cuantil")
+  # estadistico.cuant = gof(data.merge$prec_cuantil, data.merge$prec)
+  # estadisticos.sat = gof(data.merge$prec_sat, data.merge$prec)
+  # 
+  # estadistico.cuant = data.frame(estadistico.cuant)
+  # estadistico.sat = data.frame(estadisticos.sat)
+  # 
+  # names = rownames(estadistico.cuant)
+  # names = data.frame(names)
+  # 
+  # estadisticos.f = cbind(names, estadistico.cuant[,1], estadistico.sat[,1])
+  # names(estadisticos.f) = c("Estadistico", "prec_Cuantil", "prec_Satelital")
   # Corrijo Bias de los datos satelitales y prec)cuanti
   bias.ind = which(estadisticos.f$Estadistico == "PBIAS %")
   values.bias = estadisticos.f[bias.ind,]
@@ -360,6 +489,10 @@ mapeo.cuantil_Bias = function(data.obser, data.satelit){
   Estadisticos_CB <<- estadisticos.f
   return(data.merge)
 }
+################################################################################
+################################################################################
+################################################################################
+
 # ------------------------------------------------------------------------------
 ################################################################################
 ################################################################################
@@ -420,8 +553,8 @@ data.B_S = data.B_S[!is.na(data.B_S$Fecha),]
 # names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "SoldadosPTARM")
 # data.B_S = merge(data.B_S, data.MamamagM, by = "Fecha", all = TRUE)
 # names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "MamamagM")
-data.B_S$promedio = apply(data.B_S[,2:4], 1, mean, na.rm = TRUE)
-data.B_S = data.B_S[,c(1,5)]
+data.B_S$promedio = apply(data.B_S[,2:5], 1, mean, na.rm = TRUE)
+data.B_S = data.B_S[,c(1,6)]
 #obtener la fecha mínima donde la columna promedio no sea NA
 min_date = min(data.B_S$Fecha[!is.na(data.B_S$promedio)])
 data.B_S = data.B_S[data.B_S$Fecha >= min_date,]

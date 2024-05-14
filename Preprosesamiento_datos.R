@@ -27,8 +27,8 @@ library(gridExtra)
 library(ggplot2)
 # ------------------------------------------------------------------------------
 directory = "C:/Users/Jonna/Desktop/Randon_Forest/Estaciones_Tierra/Historico/Preprocesado/"
-name.estacion = "Izhcayrrumi.csv"
-nombre.estat = "Izhcayrrumi"
+name.estacion = "Cancan.csv"
+nombre.estat = "Cancan"
 # ------------------------------------------------------------------------------
 data = fread(paste(directory, name.estacion, sep = "")) 
 
@@ -355,7 +355,7 @@ datos.faltantes.horario = function(df){
 
 datos.faltantes.diario = function(df) {
   
-  #  df = data  # Eliminar esto al final
+ #df = data  # Eliminar esto al final
   fecha.minima = min(df$TIMESTAMP)
   fecha.maxima = max(df$TIMESTAMP)
   umbral.min = 10 
@@ -703,3 +703,5 @@ data_sin_outliers <- subset(data.diario, prec < quantile(data.diario$prec, 0.95)
 # Ver resumen después de eliminar los outliers
 summary(data_sin_outliers)
 
+summary(df.1)
+write.csv(df.1, "C:/Users/Jonna/Desktop/Randon_Forest/Estaciones_Tierra/Diario/Cancan.csv", row.names = FALSE)
