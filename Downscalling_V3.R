@@ -606,7 +606,9 @@ df.obs = data.B_S
 rm(data.Ventanas, data.Izcairrumi, data.Yanuncaypucan, data.SoldadosPTARM, data.B_S, directory, dir.satelital, micro.Bermejos)
 
 fc  = factor.correccion(df.obs, df.sat, 10)
-fc_biasfc = MC.bIAS(df.obs, fc, 10)  
+
+fc_biasfc = MC.bIAS(df.obs, fc, 10)  # mapeo de cuantiles a los datos quue estan con fc
 
 fc_biascrud = MC.bIAS(df.obs, df.sat, 10)
-com.1 = Validacion.final
+
+
