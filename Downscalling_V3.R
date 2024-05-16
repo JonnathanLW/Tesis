@@ -543,7 +543,7 @@ MC.bIAS = function(data.obser, data.satelit, n){
   
   estadisticos.final = cbind(test.sat_crudo, test.sat_CuantilBias, test.mod_CuantilMapping, test.mod_CuantilMappingBias)
   estadisticos.final = as.data.frame(estadisticos.final)
-  names(estadisticos.final) = c("sat_crudo", "sat_CuantilBias", "mod_CuantilMapping", "mod_CuantilMappingBias")
+  names(estadisticos.final) = c("sat_crudo", "sat_crudoBias", "mod_CuantilMapping", "mod_CuantilMappingBias")
   
   Validacion.final <<- estadisticos.final
   return(data.eval)
@@ -605,10 +605,11 @@ df.obs = data.B_S
 # Downscalling ---------------------------------------------------------------
 rm(data.Ventanas, data.Izcairrumi, data.Yanuncaypucan, data.SoldadosPTARM, data.B_S, directory, dir.satelital, micro.Bermejos)
 
+
 fc  = factor.correccion(df.obs, df.sat, 10)
 
+fc_biascrud = MC.bIAS(df.obs, df.sat, 10)
 fc_biasfc = MC.bIAS(df.obs, fc, 10)  # mapeo de cuantiles a los datos quue estan con fc
 
-fc_biascrud = MC.bIAS(df.obs, df.sat, 10)
 
 
