@@ -5,7 +5,7 @@ library(svDialogs)
 df = read.csv("C:/Users/Jonna/Desktop/Randon_Forest/Caudales/YanuncayAjTarqui.csv", header = TRUE, sep = ",")
 df = df[, c(1, 2)]
 
-analisis.caudales - function(df){
+analisis.caudales = function(df){
   names(df) = c("TIMESTAMP", "Nivel")
   df$TIMESTAMP = as.POSIXct(df$TIMESTAMP, format = "%Y-%m-%d %H:%M:%S", tz = "UTC")
   df$Nivel = as.numeric(df$Nivel)
@@ -41,7 +41,7 @@ analisis.caudales - function(df){
     }
   }
   
-  l.max = round(288 * 0.10,0)
+  l.max = as.numeric(round(288 * 0.10,0))
   
   promedios = list()
   Nas = list()
@@ -70,34 +70,31 @@ analisis.caudales - function(df){
     Nas.org[[i]] = sum(is.na(df.diario[[i]]))
   }
   
-  
   Atipicos = list()
   Nas.puros = list()
   
   for (i in 1:length(Nas.org)){
     Nas.puros[[i]] = Nas.org[[i]]
     for (j in 1:length(Nas)){
-      Atipicos[[j]] = ifelse(Nas[[j]]  != Nas.org[[i]], Nas[[j]] - Nas.org[[i]], 0)
-      # if (Nas[[j]] != Nas.org[[i]]){
-      #   Atipicos[[j]] = Nas[[j]] - Nas.org[[i]]
-      # } else {
-      #   Atipicos[[j]] = 0
-      # }
+      Atipicos[[j]] = ifelse(Nas[[i]]  != Nas.org[[i]], Nas[[j]] - Nas.org[[i]], 0)
     }
   }
   
   reporte = data.frame(Fecha = seq.diario, Nas.puros = unlist(Nas.puros), Atipicos = unlist(Atipicos))
-
+  reporte.informe = data.frame(
+    Fecha.inicio = fecha.minima,
+    Fecha.fin = fecha.maxima,
+    Nas.total = sum(is.na(df.1$Nivel)),
+    Nas.puros = sum(reporte$Nas.puros),
+    Nas.atipicos = sum(reporte$Atipicos)
+  )
   
-  
-  
+  reporte.informe <<- reporte.informe
+  return(df.final_diario)
 }
 
-  
+YanuncayAjTarqui = analisis.caudales(df)
 
   
   
   
-  
-
-
