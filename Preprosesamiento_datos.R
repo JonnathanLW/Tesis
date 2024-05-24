@@ -26,9 +26,9 @@ library(tools)
 library(gridExtra)
 library(ggplot2)
 # ------------------------------------------------------------------------------
-directory = "C:/Users/Jonna/Desktop/Randon_Forest/Estaciones_Tierra/Historico/Preprocesado/"
-name.estacion = "Cancan.csv"
-nombre.estat = "Cancan"
+directory = "C:/Users/Jonna/Desktop/Randon_Forest/Caudales/"
+name.estacion = "BermejosAjYanuncayL5m.csv"
+nombre.estat = "BermejosAjYanuncay"
 # ------------------------------------------------------------------------------
 data = fread(paste(directory, name.estacion, sep = "")) 
 
@@ -36,9 +36,9 @@ data = fread(paste(directory, name.estacion, sep = ""))
 ####################### Funciones utilizadas (Terminado ) ######################
 control.general = function(df) {
   # df = data # eliminar esto al final
-  df = df %>% select(c("TIMESTAMP", "Lluvia_Tot")) %>%
+  df = df %>% select(c("TIMESTAMP", "level_Avg")) %>%
     mutate(TIMESTAMP = as.POSIXct(TIMESTAMP, format = "%Y-%m-%d %H:%M:%S")) %>%
-    mutate(prec = as.numeric(Lluvia_Tot)) %>% select(c("TIMESTAMP", "prec"))
+    mutate(nivel = as.numeric(level_Avg)) %>% select(c("TIMESTAMP", "nivel"))
   
   
   # Buscar fechas repetidas
@@ -86,21 +86,21 @@ control.general = function(df) {
 control.rangoFijo = function(df) {
   #df = data # Eliminar esto al final
   setwd(directory)
-  Limite.superior = 10 #mm
+ # Limite.superior = 100 #mm
   Limite.inferior = 0 #mm
   
   indices.inferior = which(df$prec < Limite.inferior)
-  indices.superior = which(df$prec > Limite.superior)
+ # indices.superior = which(df$prec > Limite.superior)
   
-  atipipico.maximo = 30
-  indice.atipico = which(df$prec > atipipico.maximo)
-  if (any(indice.atipico)) {
-    dlg_message("Se encontraron datos atípicos superiores a 30 mm. Se procederá a eliminarlos.")
-    # eliminar filas con datos atípicos
-    datos.umbral30= df[indice.atipico, ]
-    Atipico.Sup30mm <<- datos.umbral30
-    df$prec[indice.atipico] = NA
-  }
+#  atipipico.maximo = 30
+  # indice.atipico = which(df$prec > atipipico.maximo)
+  # if (any(indice.atipico)) {
+  #   dlg_message("Se encontraron datos atípicos superiores a 30 mm. Se procederá a eliminarlos.")
+  #   # eliminar filas con datos atípicos
+  #   datos.umbral30= df[indice.atipico, ]
+  #   Atipico.Sup30mm <<- datos.umbral30
+  #   df$prec[indice.atipico] = NA
+  # }
   
   # divido mi df POR AÑOS
   año = year(df$TIMESTAMP)
@@ -116,15 +116,14 @@ control.rangoFijo = function(df) {
   
   for (i in 1:length(año)) {
     df.año = df %>% filter(year(TIMESTAMP) == año[i])
-    p.1 = ggplot(df.año, aes(x = TIMESTAMP, y = prec)) +
+    p.1 = ggplot(df.año, aes(x = TIMESTAMP, y = nivel)) +
       geom_line(color = "blue") +
-      labs(title = paste("Precipitación en el año", año[i]), x = "Fecha", y = "Precipitación (mm)") +
+      labs(title = paste("Niveles de agua en el año", año[i]), x = "Fecha", y = "Nivel (cm)") +
       theme(plot.title = element_text(hjust = 0.5, face = "bold"))
     graficos[[i]] = p.1
   }
   
   # guardo mi gráfico en la carpeta
-  # nombre.estat = sub("_min5.csv", "", name.estacion)
   p.f = grid.arrange(grobs = graficos)
   ggsave(paste0(directory, "G_rangoFijoCrudo/", nombre.estat, "_rangoFijo.png"),
          plot = p.f, width = 12, height = 8, units = "in", dpi = 300, type = "cairo")
@@ -143,22 +142,22 @@ control.rangoFijo = function(df) {
     dlg_message("No se encontraron valores inferiores al limite inferior.")
   }
   
-  if (any(indices.superior)) {
-    dlg_message(paste("Se encontraron valores superiores al limite superior. Antes de eliminarlos reviselos los graficos generados en", paste0(directory, "G_rangoFijoCrudo/", nombre.estat, "_rangoFijo.png")))
-    datos.superior = df[indices.superior, ]
-    datos.LimiteSup <<- datos.superior
-    View(datos.superior)
-    
-    res = dlg_message("Desea eliminar los datos superiores al limite superior?", type = "yesno")$res
-    if (res == "yes") {
-      df$prec[indices.superior] = NA
-    } else {
-      df = df
-    }
-    
-  } else {
-    dlg_message("No se encontraron valores superiores al limite superior.")
-  }
+  # if (any(indices.superior)) {
+  #   dlg_message(paste("Se encontraron valores superiores al limite superior. Antes de eliminarlos reviselos los graficos generados en", paste0(directory, "G_rangoFijoCrudo/", nombre.estat, "_rangoFijo.png")))
+  #   datos.superior = df[indices.superior, ]
+  #   datos.LimiteSup <<- datos.superior
+  #   View(datos.superior)
+  #   
+  #   res = dlg_message("Desea eliminar los datos superiores al limite superior?", type = "yesno")$res
+  #   if (res == "yes") {
+  #     df$prec[indices.superior] = NA
+  #   } else {
+  #     df = df
+  #   }
+  #   
+  # } else {
+  #   dlg_message("No se encontraron valores superiores al limite superior.")
+  # }
   
   
   # 
