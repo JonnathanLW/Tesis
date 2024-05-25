@@ -20,7 +20,7 @@ library(randomForest)
 caudal = read.csv("C:/Users/Jonna/Desktop/Randon_Forest/Caudales/YanuncayAjTarqui.csv", header = TRUE)
 caudal$TIMESTAMP = as.Date(caudal$TIMESTAMP, format = "%Y-%m-%d")
 names(caudal) = c("Fecha", "nivel")
-
+summary(caudal)
 convertir.caudal = function(df){
   names(df) = c("TIMESTAMP", "nivel")
   df$TIMESTAMP = as.Date(df$TIMESTAMP, format = "%Y-%m-%d")
@@ -52,53 +52,35 @@ convertir.caudal = function(df){
 caudal = convertir.caudal(caudal)
 caudal = caudal[, c("TIMESTAMP", "Caudal")]
 names(caudal) = c("Fecha", "caudal")
+summary(caudal)
 
-# df = merge(prec, caudal, by = "Fecha", all = TRUE)
-# names(df) = c("Fecha", "prec_sat", "caudal")
-# df = merge(df, prec_hizhil, by = "Fecha", all = TRUE)
-# names(df) = c("Fecha", "prec_sat", "caudal", "prec_tier")
-# 
-# #data = na.omit(df)
-# data = data[,c("caudal", "prec_sat",  "prec_tier")]
-# data$Tlag1sat = c(NA, data$prec_sat[1:(nrow(data)-1)])
-# data$Tlag2sat = c(NA, NA, data$prec_sat[1:(nrow(data)-2)])
-# data$Tlag3sat = c(NA, NA, NA, data$prec_sat[1:(nrow(data)-3)])
-# data$Tlag1tier = c(NA, data$prec_tier[1:(nrow(data)-1)])
-# data$Tlag2tier = c(NA, NA, data$prec_tier[1:(nrow(data)-2)])
-# data$Tlag3tier = c(NA, NA, NA, data$prec_tier[1:(nrow(data)-3)])
+caudal.max = 100
+indices.c = which(caudal$caudal > caudal.max)
+
+# coloco Na en los valores mayores a 100
+caudal$caudal[indices.c] = NA
+summary(caudal)
 
 
-
-
-# Aplicacion de randon Forest ---------------------------------------------
+# Aplicacion de randon Forest --------------------------------------------------
 set.seed(123) # reproducibilidad
-# trainIndex = createDataPartition(data$caudal, p = 0.8, list = FALSE)
-# data_train = data[trainIndex,]
-# data_test = data[-trainIndex,]
-
 df = caudal
 df$year = as.numeric(format(df$Fecha, "%Y"))
 df$month = as.numeric(format(df$Fecha, "%m"))
 df$day = as.numeric(format(df$Fecha, "%d"))
 df = df[,(-1)]
 
+# creo un 20% de datos faltantes, pero conociendo los indices donde seran creados
+
+indices_Na = sample(1:nrow(df), nrow(df)*0.20)
+df$caudal[indices_Na] = NA
+
 modelo.rf = missForest(df, 
-                       ntree = 500,
+                       ntree = 800,
                        sqrt(ncol(df) - 1),
                        xtrue = NA)
 
-
-
-
 datos_imputados = modelo.rf$ximp
-obs = df$caudal
-pred = datos_imputados$caudal
+obs = caudal$caudal[indices_Na]
+pred = datos_imputados$caudal[indices_Na]
 gof(pred, obs)
-# df_eval = cbind(obs, pred)
-# df_eval = na.omit(df_eval)
-# 
-# datos_imputados$caudal[is.na(datos_imputados$caudal)] <- modelo.rf$ximp[is.na(datos_imputados$caudal), 1]
-# índices_no_na <- which(!is.na(data_test$caudal))
-# obs = data_test[índices_no_na, "caudal"]
-# pred = modelo.rf$ximp[índices_no_na, "caudal"]
-# gof(pred, obs)
