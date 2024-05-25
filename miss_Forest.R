@@ -1,10 +1,6 @@
 library(missForest)
-library(dplyr)
-library(tidyr)
-library(svDialogs)
 library(caret)
 library(hydroGOF)
-library(randomForest)
 # 
 # prec = read.csv("C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_2/Downscalling/prec_microcuencas/Micro_Yanuncay.csv", header = TRUE)
 # prec = prec[, c("Fecha", "mod_CuantilMapping")]
@@ -70,13 +66,13 @@ df$month = as.numeric(format(df$Fecha, "%m"))
 df$day = as.numeric(format(df$Fecha, "%d"))
 df = df[,(-1)]
 
-# creo un 20% de datos faltantes, pero conociendo los indices donde seran creados
+# creo un 20% de datos faltantes, pero conociendo los indices donde serán creados
 
 indices_Na = sample(1:nrow(df), nrow(df)*0.20)
 df$caudal[indices_Na] = NA
 
 modelo.rf = missForest(df, 
-                       ntree = 800,
+                       ntree = 500,
                        sqrt(ncol(df) - 1),
                        xtrue = NA)
 
