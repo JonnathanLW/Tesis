@@ -1,29 +1,18 @@
 library(missForest)
 library(caret)
 library(hydroGOF)
-# 
-# prec = read.csv("C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_2/Downscalling/prec_microcuencas/Micro_Yanuncay.csv", header = TRUE)
-# prec = prec[, c("Fecha", "mod_CuantilMapping")]
-# names(prec) = c("Fecha", "prec")
-# prec$Fecha = as.Date(prec$Fecha, format = "%Y-%m-%d")
-# 
-# # Cargo prec mas cercana
-# prec_hizhil = read.csv("C:/Users/Jonna/Desktop/Randon_Forest/Estaciones_Tierra/Diario/Huizhil.csv", header = TRUE)
-# names(prec_hizhil) = c("Fecha", "prec")
-# prec_hizhil$Fecha = as.Date(prec_hizhil$Fecha, format = "%Y-%m-%d")
+library(ggplot2)
+library(mice)
 
-# Cargamos caudales
-caudal = read.csv("C:/Users/Jonna/Desktop/Randon_Forest/Caudales/YanuncayAjTarqui.csv", header = TRUE)
-caudal$TIMESTAMP = as.Date(caudal$TIMESTAMP, format = "%Y-%m-%d")
-names(caudal) = c("Fecha", "nivel")
-summary(caudal)
+################################################################################
+# Funciones necesarias ---------------------------------------------------------
 convertir.caudal = function(df){
   names(df) = c("TIMESTAMP", "nivel")
   df$TIMESTAMP = as.Date(df$TIMESTAMP, format = "%Y-%m-%d")
   df$nivel = as.numeric(df$nivel)
-  
+
   df$Caudal = NA
-  
+
   # Aplico las fórmulas de caudal según el nivel
   for (i in seq_along(df$nivel)) {
     nivel = df$nivel[i]
@@ -35,48 +24,141 @@ convertir.caudal = function(df){
       }
     }
   }
-  
-  # selecciono las columnas que me interesan
-  # df = df[,c("TIMESTAMP", "Caudal")]
+
+  # # selecciono las columnas que me interesan
+  # df = df[,c("TIMESTAMP", "nivel")]
+  df = df[,c("TIMESTAMP", "Caudal")]
+  names(df) = c("Fecha", "caudal")
   # voy filtrando por fechas de interés
-  fecha.min = as.Date("2014-05-14")
-  fecha.max = as.Date("2023-06-06")
-  df = df[(df$TIMESTAMP >= fecha.min & df$TIMESTAMP <= fecha.max),]
+  # fecha.min = as.Date("2014-05-14")
+  # fecha.max = as.Date("2023-06-06")
+  # df = df[(df$TIMESTAMP >= fecha.min & df$TIMESTAMP <= fecha.max),]
   return(df)
 }
-
+convertir.prec = function(df){
+  names(df) = c("TIMESTAMP", "prec")
+  df$TIMESTAMP = as.Date(df$TIMESTAMP, format = "%Y-%m-%d")
+  df$prec = as.numeric(df$prec)
+  names(df) = c("Fecha", "prec")
+  return(df)
+}
+T.lag = function(x, n){
+  c(rep(NA, n), x)[1:length(x)]
+}
+################################################################################'
+# Carga de datos ---------------------------------------------------------------
+# Caudales
+caudal = read.csv("C:/Users/Jonna/Desktop/Nueva carpeta/Yanuncay_diario.csv", header = TRUE)
 caudal = convertir.caudal(caudal)
-caudal = caudal[, c("TIMESTAMP", "Caudal")]
-names(caudal) = c("Fecha", "caudal")
 summary(caudal)
 
-caudal.max = 100
-indices.c = which(caudal$caudal > caudal.max)
-
-# coloco Na en los valores mayores a 100
-caudal$caudal[indices.c] = NA
+# selecciono todas las filas q sean menores a 300
+ind.1 = which(caudal$caudal > 300)
+caudal$caudal[ind.1] = NA
 summary(caudal)
+# precipitaciones
+# prec = read.csv("C:/Users/Jonna/Desktop/Nueva carpeta/Huizhil.csv", header = TRUE)
+prec = read.csv("C:/Users/Jonna/Desktop/Randon_Forest/Estaciones_Tierra/Diario/CebollarPTAPM.csv", header = TRUE)
+prec_h = read.csv("C:/Users/Jonna/Desktop/Randon_Forest/Estaciones_Tierra/Diario/Huizhil.csv", header = TRUE)
+prec_y = read.csv("C:/Users/Jonna/Desktop/Randon_Forest/Estaciones_Tierra/Diario/YanuncayPucan.csv", header = TRUE)
+
+prec = convertir.prec(prec)
+prec = prec[,c("Fecha", "prec")]
+prec_h = convertir.prec(prec_h)
+prec_y = convertir.prec(prec_y)
+
+summary(prec)
+summary(prec_h)
+summary(prec_y)
+
+ind.2 = which(prec_y$prec > 300)
+prec_y$prec[ind.2] = NA
+
+################################################################################
+# Preprocesamiento de datos ----------------------------------------------------
+df = merge(prec, prec_h, by = "Fecha", all = TRUE)
+names(df) = c("Fecha", "prec", "prec_h")
+df = merge(df, prec_y, by = "Fecha", all = TRUE)
+names(df) = c("Fecha", "prec", "prec_h", "prec_y")
+df = merge(df, caudal, by = "Fecha", all = TRUE)
+names(df) = c("Fecha", "prec", "prec_h", "prec_y", "caudal")
+#df = merge(prec, caudal, by = "Fecha", all = TRUE)
+cor(df[,-1], use = "complete.obs") # Analizo la correlacion entre prec y caudal
+
+# agrego Tlag para ver la correlación en los diferentes desfases
+df$Tplag_1 = T.lag(df$prec, 1)
+df$Tplag_2 = T.lag(df$prec, 2)
+df$Tplag_3 = T.lag(df$prec, 3)
+
+df$Tplag_h_1 = T.lag(df$prec_h, 1)
+df$Tplag_h_2 = T.lag(df$prec_h, 2)
+df$Tplag_h_3 = T.lag(df$prec_h, 3)
+
+df$Tplag_y_1 = T.lag(df$prec_y, 1)
+df$Tplag_y_2 = T.lag(df$prec_y, 2)
+df$Tplag_y_3 = T.lag(df$prec_y, 3)
 
 
-# Aplicacion de randon Forest --------------------------------------------------
+cor(df[,-1], use = "complete.obs")
+
+df_train = df[,c("Fecha", "Tplag_h_1", "Tplag_1", "Tplag_y_1", "prec_h", "caudal")]
+
+# Extraigo la primer y ultima fecha donde caudal tenga el primer dato
+# df_train = df_train[!is.na(df_train$caudal),]
+first.date = which(!is.na(df_train$caudal))[1]
+df.min = df_train$Fecha[first.date]
+fin.date = tail(which(!is.na(df_train$caudal)), n = 1)
+df.max = df_train$Fecha[fin.date]
+
+seq = seq(df.min, df.max, by = "day")
+Fecha = data.frame(Fecha = seq)
+df_train = merge(Fecha, df_train, by = "Fecha")
+# filtro los datos
+# df_train = df_train[(df_train$Fecha >= df.min & df_train$Fecha <= df.max),]
+################################################################################
+# Aplicación de randon Forest --------------------------------------------------
+
 set.seed(123) # reproducibilidad
-df = caudal
-df$year = as.numeric(format(df$Fecha, "%Y"))
-df$month = as.numeric(format(df$Fecha, "%m"))
-df$day = as.numeric(format(df$Fecha, "%d"))
-df = df[,(-1)]
+df_train$Year = as.numeric(format(df_train$Fecha, "%Y"))
+df_train$Month = as.numeric(format(df_train$Fecha, "%m"))
+df_train$Day = as.numeric(format(df_train$Fecha, "%d"))
+
+df_train = df_train[,-1]
 
 # creo un 20% de datos faltantes, pero conociendo los indices donde serán creados
+indices_Na = sample(1:nrow(df_train), nrow(df_train)*0.20)
+obs = df_train$caudal[indices_Na]
+df_train$caudal[indices_Na] = NA
 
-indices_Na = sample(1:nrow(df), nrow(df)*0.20)
-df$caudal[indices_Na] = NA
-
-modelo.rf = missForest(df, 
+modelo.rf = missForest(df_train, 
                        ntree = 500,
                        sqrt(ncol(df) - 1),
                        xtrue = NA)
 
-datos_imputados = modelo.rf$ximp
-obs = caudal$caudal[indices_Na]
+
+# Validación del modelo --------------------------------------------------------
+datos_imputados = modelo.rf$ximp # ectraigo datos imputados
+modelo.rf$OOBerror # error de imputación
+
+# test de HydroGOF
 pred = datos_imputados$caudal[indices_Na]
 gof(pred, obs)
+
+# ploteo de resultados
+plot(density(obs, na.rm = TRUE), col = "black", lwd = 2, main = "Densidad de caudales", xlab = "Caudal", ylab = "Densidad")
+lines(density(pred), col = "red", lwd = 2)
+legend("topright", c("Caudal observado", "caudal imputado"), fill = c("black", "red"))
+
+
+# Algoritmo Mice ---------------------------------------------------------------
+
+mice.model = mice(df_train, m = 5, method = "rf", seed = 123)
+data.mice = complete(mice.model)
+pred.2 = data.mice$caudal[indices_Na]
+gof(pred.2, obs)
+
+# ploteo de resultados
+plot(density(obs, na.rm = TRUE), col = "black", lwd = 2, main = "Densidad de caudales", xlab = "Caudal", ylab = "Densidad")
+lines(density(pred.2), col = "red", lwd = 2)
+legend("topright", c("Caudal observado", "caudal imputado"), fill = c("black", "red"))
+
