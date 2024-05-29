@@ -483,7 +483,7 @@ fc.2 = fc[, c("Fecha", "prec_correg")]
 df.obs.2 = which(format(df.obs$Fecha, "%m-%d") == "02-29")
 df.obs.1 = df.obs[-df.obs.2,]
 fc_biasfc = MC.bIAS(df.obs.1, fc.2, 5)  # mapeo de cuantiles a los datos quue estan con fc
-
+summary(fc_biasfc)
 
 # dir.sve = "C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_2/Downscalling/prec_microcuencas"
 # write.csv(fc_biascrud, paste(dir.sve, "/Micro_Yanuncay.csv", sep = ""))
