@@ -1,7 +1,7 @@
 ################################# Downscalling #################################
 # ------------------------------------------------------------------------------
 # Fecha ultima modificación: 2024-02-09 (año-mes-día)
-# Versión: 3.0.0
+# Versión: 3.1.0
 # ------------------------------------------------------------------------------
 ################################################################################
 # Librerías necesarias ---------------------------------------------------------
@@ -18,7 +18,6 @@ library(qmap)
 ######################### Funciones auxiliares ################################
 
 factor.correccion = function(df.obs, df.sat, n){
-  
   rename = function(data) {
     names(data) = c("Fecha", "prec")
     data$Fecha = as.Date(data$Fecha, format = "%Y-%m-%d")
@@ -27,13 +26,18 @@ factor.correccion = function(df.obs, df.sat, n){
   
   df.obs = rename(df.obs)
   df.sat = rename(df.sat)
-
   dia.juliano = function(df) {
+    # df = df.obs
+    df = data.frame(df)
+    rownames(df) = NULL
+    
     Fecha.1 = as.Date("2016-02-29")
     Fecha.2 = as.Date("2020-02-29")
     Fecha.3 = as.Date("2024-02-29")
     df_julianos = as.Date(c(Fecha.1, Fecha.2, Fecha.3))
+    
     fechas.presentes = intersect(df_julianos, df$Fecha)
+    
     # Igualo los años para que todos tengan 365 dias
     df_29.i = which(format(df$Fecha, "%m-%d") == "02-29")
     df_29 = df[df_29.i,]
@@ -63,9 +67,11 @@ factor.correccion = function(df.obs, df.sat, n){
       df = df[-df_29.i,]
       rownames(df) = NULL
       df$anio = as.numeric(format(df$Fecha, "%Y"))
+      
       df_temp1 = df[!df$anio %in% c(n1, n2),]
       df_temp2 = df[df$anio %in% c(n1, n2),] # incluyen datos de 29 de febrero
       # Calculo el día juliano para aquellos años no bisiestos
+      
       df_temp1$dia_juliano = as.numeric(format(df_temp1$Fecha, "%j"))
       # Calculo el día juliano para aquellos años bisiestos
       df_temp2$dia_juliano = seq_len(nrow(df_temp2)) %% 365
@@ -97,7 +103,6 @@ factor.correccion = function(df.obs, df.sat, n){
       # Acción si solo Fecha.1 está en df_compara
       return(df)
     }
-    
     if (nrow(df_29) > 1) {
       if(length(fechas.presentes) == 1 && as.Date("2016-02-29") %in% df$Fecha) {
         df = f(2016)
@@ -107,15 +112,11 @@ factor.correccion = function(df.obs, df.sat, n){
         df = f(2024)
       } else if(length(fechas.presentes) == 2 && as.Date("2016-02-29") %in% df$Fecha && as.Date("2020-02-29") %in% df$Fecha) {
         df = f.2(2016, 2020)
-        # Acción si Fecha.1 y Fecha.2 están juntas en df_compara
       } else if(length(fechas.presentes) == 2 && as.Date("2016-02-29") %in% df$Fecha && as.Date("2024-02-29") %in% df$Fecha) {
         df = f.2(2016, 2024)
-        # Acción si Fecha.1 y Fecha.3 están juntas en df_compara
       } else if(length(fechas.presentes) == 2 && as.Date("2020-02-29") %in% df$Fecha && as.Date("2024-02-29") %in% df$Fecha) {
         df = f.2(2020, 2024)
-        # Acción si Fecha.2 y Fecha.3 están juntas en df_compara
       } else if (length(fechas.presentes) == 3) {
-        # Acción si las tres fechas están juntas en df_compara
         df = f.3(2016, 2020, 2024)
       } else {
         dlg_message("Verifique el script posibles errores encoentrados")
@@ -201,8 +202,8 @@ factor.correccion = function(df.obs, df.sat, n){
     
     data.clean = na.omit(data.obs)
     indices = sample(1:nrow(data.clean), 0.8 * nrow(data.clean))
-    data.train = data.clean[indices,]
-    data.test = data.clean[-indices,]
+    data.train = data.clean[indices,] # entrenamiento
+    data.test = data.clean[-indices,] # validacion 
     
     folds = createFolds(data.train$prec, k = n, list = TRUE, returnTrain = TRUE)
     resultados = list()
@@ -218,7 +219,7 @@ factor.correccion = function(df.obs, df.sat, n){
 
       data_corregida = datos.corregidos(data.crudo, factores)
       
-      # validacion del modelo
+      # validación del modelo
       obs_test = test$prec
       pred_test = data_corregida$prec_corregida[match(test$Fecha, data_corregida$Fecha)]
       valid_values = complete.cases(obs_test, pred_test)
@@ -228,6 +229,7 @@ factor.correccion = function(df.obs, df.sat, n){
       test = gof(pred_testV, obs_testV)
       test = data.frame(test)
       names(test) = "valor"
+      
       # Crear un nuevo marco de datos con los nombres de las filas como una columna
       test.f = cbind(Estadistico = rownames(test), test)
       rownames(test.f)  = NULL
@@ -235,7 +237,6 @@ factor.correccion = function(df.obs, df.sat, n){
       resultados[[i]] = list(data.test = data.test, train = train, test = test, factores = factores,
                              data_corregida = data_corregida, test.f = test.f)
     }
-    
     
     gof_lista = list()
     for (i in 1:n) {
@@ -247,104 +248,57 @@ factor.correccion = function(df.obs, df.sat, n){
     gof_df = do.call(cbind, gof_lista)
     gof_df = as.data.frame(gof_df)
     colnames(gof_df) = paste("Fold", 1:n, sep = "_")
+    
+    gof_df$promedio = rowMeans(gof_df[,1:n])
+    
     gof_cross_validation <<- gof_df
     
-    return(list(resultados = resultados, test.f = gof_df))
-  }
-
-  rest.validation = validacion.cruzada(data.obs, promedio.micro, data.crudo)
- 
-  # evaluó los factores de corrección 
-  best_facts = rest.validation$test.f
-  best_facts = as.data.frame(best_facts)
-
-  
-  fold.min = function(df, estadistico){
-    fold_minimo = which.min(df[estadistico, ])
-    return(fold_minimo)
-  }
-  fold.max = function(df, estadistico){
-    fold_maximo = which.max(df[estadistico, ])
-    return(fold_maximo)
-  }
-  
-  fold.bias = function(df, estadistico){
-    fold_bias = which.min(abs(df[estadistico, ]))
-    return(fold_bias)
-  }
-
-  
-  RMSE.min = fold.min(best_facts, "RMSE")
-  RMSE.min = names(RMSE.min)
-  Pbias.min = fold.bias(best_facts, "PBIAS %")
-  Pbias.min = names(Pbias.min)
-  KGE.max = fold.max(best_facts, "KGE")
-  KGE.max = names(KGE.max)
-  NSE.max = fold.max(best_facts, "NSE")
-  NSE.max = names(NSE.max)
-  R2.max = fold.max(best_facts, "R2")
-  R2.max = names(R2.max)
-  
-  data.f = cbind(RMSE.min, Pbias.min, KGE.max, NSE.max, R2.max)
-  valores = as.vector(as.matrix(data.f))
-  frecuencias = table(valores)
-  fold_mas_frecuente = names(which.max(frecuencias))
-  num_fold = as.numeric(substr(fold_mas_frecuente, nchar(fold_mas_frecuente), nchar(fold_mas_frecuente)))
-  
-  View(best_facts)
-  msg = dlg_message(paste("El algoritmo encontró que los mejores estadísticos tiene el fold", fold_mas_frecuente, "Presione 'Sí' para validar el modelo con este fold, presione 'No' para seleccionar otro fold"), "yesno")$res
-  
-  evaluacion.final = function(rest.validation, best.factor, data.crudo) {
- 
-    # Evaluación del modelo con datos nunca vistos ----------------------------
-    mejores_factores = rest.validation$resultados[[best.factor]]$factores
+    # Evaluamos de manera interna 80$ de entrenamiento y 20% de validación
+    data.train = dia.juliano(data.train)
+    promedio_train = promedio.diaJuliano(data.train)
+    factores.finales = factores.correcion(promedio_train, promedio.micro)
+    data_corregida.f = datos.corregidos(data.crudo, factores.finales)
     
-    # Aplicar los factores de corrección a los datos crudos para obtener los datos corregidos
-    data.test = rest.validation$resultados[[best.factor]]$data.test
-    data.test = rename(data.test)
-    # data.test = dia.juliano(data.test) # bug encoentrado 
-    
-    data_corregida_test = datos.corregidos(data.crudo, mejores_factores)
-    
-    # Calcular métricas de error en el conjunto de prueba
     obs_test = data.test$prec
-    pred_test = data_corregida_test$prec_corregida[match(data.test$Fecha, data_corregida_test$Fecha)]
+    pred_test.f = data_corregida.f$prec_corregida[match(data.test$Fecha, data_corregida.f$Fecha)]
+    valid_values.f = complete.cases(obs_test, pred_test.f)
+    obs_testV.f = obs_test[valid_values.f]
+    pred_testV.f = pred_test.f[valid_values.f]
     
-    # data_corregido.final = datos.corregidos(data.crudo, factores, paste(name.micro, "_", i, sep = ""))
+    test.f = gof(pred_testV.f, obs_testV.f)
+    test.f = data.frame(test.f)
+    names(test.f) = "valor"
     
-    valid_values = complete.cases(obs_test, pred_test)
-    obs_testVV = obs_test[valid_values]
-    pred_testVV = pred_test[valid_values]
-    
-    test = gof(pred_testVV, obs_testVV)
-    test = data.frame(test)
-    names(test) = "valor"
     # Crear un nuevo marco de datos con los nombres de las filas como una columna
-    test.f = cbind(Estadistico = rownames(test), test)
-    rownames(test.f)  = NULL
+    sobreajuste = cbind(Estadistico = rownames(test.f), test.f, Est.folds = gof_df$promedio)
+    names(sobreajuste) = c("Estadistico", "Eval.Final", "Est.folds")
+    rownames(sobreajuste)  = NULL
     
-    GOFevaluacion_final <<- test.f
+    Estad.SobreajusteFC <<- sobreajuste
     
-    return(data_corregida_test)
-    
+    return(list(resultados = resultados, test.f = test.f, sobreajuste = sobreajuste))
+  
   }
   
-  if (msg == "yes") {
-    eval = evaluacion.final(rest.validation, num_fold, data.crudo)
-  } else {
-    k_fold = dlg_input("Ingrese el número de fold")$res
-    k_fold = as.numeric(k_fold)
-    eval = evaluacion.final(rest.validation, k_fold, data.crudo)
-  }
-  eval = eval %>% dplyr::select(Fecha, prec_corregida)
-  return(eval)
+  validacion.cruzada(data.obs, promedio.micro, data.crudo)
+  
+  # Evaluamos de manera interna 80$ de entrenamiento y 20% de validación
+  
+  data.obsf = data.obs
+  data.obsf = dia.juliano(data.obsf)
+  promedio.dataobsf = promedio.diaJuliano(data.obsf)
+  
+  factores.finalesF = factores.correcion(promedio.dataobsf, promedio.micro)
+  data_corregida.f = datos.corregidos(data.crudo, factores.finalesF)
+  names(data_corregida.f) = c("Fecha", "prec_sat", "prec_correg")
+  
+  
+  return(data_corregida.f)
+
 }
 
 MC.bIAS = function(data.obser, data.satelit, n){
-  # data.obser = df.obs
-  # data.satelit = df.sat
-  # n = 10
-  
+
   mapeo.cuantil = function(data.obser, data.satelit, n){
     
     names(data.obser) = c("Fecha", "prec")
@@ -398,157 +352,56 @@ MC.bIAS = function(data.obser, data.satelit, n){
     gof_df = do.call(cbind, gof_lista)
     gof_df = as.data.frame(gof_df)
     colnames(gof_df) = paste("Fold", 1:n, sep = "_")
+    gof_df$promedio = rowMeans(gof_df[,1:n])
     gof_CuantilMapping <<- gof_df
+  
+    # Valido el modelo con el 20% de los datos
+    data.train$Fecha = as.Date(data.train$Fecha, format = "%Y-%m-%d")
+    data.test$Fecha = as.Date(data.test$Fecha, format = "%Y-%m-%d")
+    Fecha = as.data.frame(data.test$Fecha)
     
+    qm_fit = fitQmap(data.train$obs, data.train$mod, method = "QUANT")
+    qm1 = doQmap(data.train$mod, qm_fit)
+    qm2 = doQmap(data.test$mod, qm_fit)
+    
+    obs_test.f = data.test$obs
+    pred_test.f = qm2
+    
+    data.merge.f = cbind(Fecha, obs_test.f, pred_test.f)
+    
+    test.val = gof(pred_test.f, obs_test.f)
+    test.val = data.frame(test)
+    names(test) = "valor"
+    
+    # Crear un nuevo marco de datos con los nombres de las filas como una columna
+    test.val = cbind(Estadistico = rownames(test.val), test.val)
+    
+    Estad.Sobreajuste = cbind(Estadistico = rownames(test.val), Est.Vald =  test.val$valor, Est.folds = gof_df$promedio)
+    Estad.Sobreajuste = as.data.frame(Estad.Sobreajuste)
+    Estad.SobreajusteQM <<- Estad.Sobreajuste
+   
     return(list(resultados = resultados, test.f = gof_df))
  
     # validacion del modelo con el Test Data
   }
   
-  rest.validation = mapeo.cuantil(data.obser, data.satelit, n)
+  mapeo.cuantil(data.obser, data.satelit, n)
   
-  # evaluó los factores de corrección 
-  best_facts = rest.validation$test.f
-  best_facts = as.data.frame(best_facts)
+  names(data.obser) = c("Fecha", "prec")
+  names(data.satelit) = c("Fecha", "prec")
   
+  data.obser$Fecha = as.Date(data.obser$Fecha, format = "%Y-%m-%d")
+  data.satelit$Fecha = as.Date(data.satelit$Fecha, format = "%Y-%m-%d")
   
-  fold.min = function(df, estadistico){
-    fold_minimo = which.min(df[estadistico, ])
-    return(fold_minimo)
-  }
+  qm_fitF = fitQmap(data.obser$prec, data.satelit$prec, method = "QUANT")
+  qm2F = doQmap(data.satelit$prec, qm_fitF)
   
-  fold.max = function(df, estadistico){
-    fold_maximo = which.max(df[estadistico, ])
-    return(fold_maximo)
-  }
+  data.merge.F = cbind(data.obser, data.satelit$prec, qm2F)
+  names(data.merge.F) = c("Fecha", "prec_obser", "prec_Sat", "prec_QM")
   
-  fold.bias = function(df, estadistico){
-    fold_bias = which.min(abs(df[estadistico, ]))
-    return(fold_bias)
-  }
-  
-  
-  RMSE.min = fold.min(best_facts, "RMSE")
-  RMSE.min = names(RMSE.min)
-  Pbias.min = fold.bias(best_facts, "PBIAS %")
-  Pbias.min = names(Pbias.min)
-  KGE.max = fold.max(best_facts, "KGE")
-  KGE.max = names(KGE.max)
-  NSE.max = fold.max(best_facts, "NSE")
-  NSE.max = names(NSE.max)
-  R2.max = fold.max(best_facts, "R2")
-  R2.max = names(R2.max)
-  
-  data.f = cbind(RMSE.min, Pbias.min, KGE.max, NSE.max, R2.max)
-  valores = as.vector(as.matrix(data.f))
-  frecuencias = table(valores)
-  fold_mas_frecuente = names(which.max(frecuencias))
-  num_fold = as.numeric(substr(fold_mas_frecuente, nchar(fold_mas_frecuente), nchar(fold_mas_frecuente)))
-  
-  View(best_facts)
-  msg = dlg_message(paste("El algoritmo encontró que los mejores estadísticos tiene el fold", fold_mas_frecuente, "Presione 'Sí' para validar el modelo con este fold, presione 'No' para seleccionar otro fold"), "yesno")$res
-  
-  evaluacion.final = function(rest.validation, best.factor, data.satelit) {
-    # 
-    # res.validation = rest.validation
-    # best.factor = num_fold
-    # data.satelit = data.satelit
-    # Evaluación del modelo con datos nunca vistos ----------------------------
-    mejores_factores = rest.validation$resultados[[best.factor]]$qm_fit
-    data.crudo = data.satelit
-    data.crudo$Fecha = as.Date(data.crudo$Fecha, format = "%Y-%m-%d")
-    # Aplicar los factores de corrección a los datos crudos para obtener los datos corregidos
-    data.test = rest.validation$resultados[[best.factor]]$data.test
-    #data.test = rename(data.test)
-    # data.test = dia.juliano(data.test) # bug encoentrado 
-    
-    predicciones = doQmap(data.test$mod, mejores_factores)
-    data.f = cbind(data.test$mod, predicciones)
-    data.f = data.frame(data.f)
-    
-    data.test$Fecha = as.Date(data.test$Fecha, format = "%Y-%m-%d")
-    Fecha = as.data.frame(data.test$Fecha)
-    
-    data.f = data.frame(cbind(Fecha, data.f))
-    names(data.f) = c("Fecha", "obs", "mod")
-    test = gof(data.f$mod, data.f$obs)
-    test = data.frame(test)
-    names(test) = "valor"
-    # Crear un nuevo marco de datos con los nombres de las filas como una columna
-    
-    GOFCuantilMapping_final <<- test
-    
-    data_corregida = doQmap(data.crudo$prec, mejores_factores)
-    Fecha = as.data.frame(data.crudo$Fecha)
-    data_corregida = data.frame(cbind(Fecha, data_corregida))
-    names(data_corregida) = c("Fecha", "prec_CuantilMapping")
- 
-    return(data_corregida)
-    
-  }
-  
-  if (msg == "yes") {
-    eval = evaluacion.final(rest.validation, num_fold, data.satelit)
-  } else {
-    k_fold = dlg_input("Ingrese el número de fold")$res
-    k_fold = as.numeric(k_fold)
-    eval = evaluacion.final(rest.validation, k_fold, data.satelit)
-  }
-  
-  eval = eval %>% dplyr::select(Fecha, prec_CuantilMapping)
-  
-  
-  # correccion por el factor de Bias
-  rename = function(data) {
-    names(data) = c("Fecha", "prec")
-    data$Fecha = as.Date(data$Fecha, format = "%Y-%m-%d")
-    return(data)
-  }
-  data.real = data.obser
-  data.sim = eval
-  data.sat = data.satelit
-  data.real = rename(data.real)
-  data.sim = rename(data.sim)
-  data.sat = rename(data.sat)
-  
-  
-  
-  data.eval = merge(data.real, data.sim, by = "Fecha")
-  names(data.eval) = c("Fecha", "obs", "mod_CuantilMapping")
-  data.eval = merge(data.eval, data.sat, by = "Fecha")
-  names(data.eval) = c("Fecha", "obs", "mod_CuantilMapping", "sat_crudo")
-  
-  test.1 = gof(data.eval$mod_CuantilMapping, data.eval$obs)
-  test.2 = gof(data.eval$sat_crudo, data.eval$obs)
-  
-  index.1 = which(row.names(test.1) == "PBIAS %")
-  bias.1 = test.1[index.1,]
-  index.2 = which(row.names(test.2) == "PBIAS %")
-  bias.2 = test.2[index.2,]
-  
-  # correji por factor Bias
-  factor.1 = 1 - (bias.1 / 100)
-  factor.2 = 1 - (bias.2 / 100)
-  
-  data.eval$mod_CuantilMappingBias = data.eval$mod_CuantilMapping * factor.1
-  data.eval$sat_CuantilBias = data.eval$sat_crudo * factor.2
-  
-  data.eval = data.eval %>% dplyr::select(Fecha, obs, sat_crudo, sat_CuantilBias,  mod_CuantilMapping, mod_CuantilMappingBias)
-  
-  # validacion final 
-  test.sat_crudo = gof(data.eval$sat_crudo, data.eval$obs)
-  test.sat_CuantilBias = gof(data.eval$sat_CuantilBias, data.eval$obs)
-  test.mod_CuantilMapping = gof(data.eval$mod_CuantilMapping, data.eval$obs)
-  test.mod_CuantilMappingBias = gof(data.eval$mod_CuantilMappingBias, data.eval$obs)
-  
-  estadisticos.final = cbind(test.sat_crudo, test.sat_CuantilBias, test.mod_CuantilMapping, test.mod_CuantilMappingBias)
-  estadisticos.final = as.data.frame(estadisticos.final)
-  names(estadisticos.final) = c("sat_crudo", "sat_crudoBias", "mod_CuantilMapping", "mod_CuantilMappingBias")
-  
-  Validacion.final <<- estadisticos.final
-  return(data.eval)
+  return(data.merge.F)
 }
-  
+
 # ------------------------------------------------------------------------------
 rename = function(data) {
   names(data) = c("Fecha", "prec")
@@ -600,10 +453,6 @@ data.B_S = merge(data.B_S, data.Yanuncaypucan, by = "Fecha", all = TRUE)
 names(data.B_S) = c("Fecha", "Huizhil", "Totoracocha", "CebollarPTAPM", "Yanuncaypucan")
 
 
-
-
-
-
 data.B_S = merge(data.Ventanas, data.Izcairrumi, by = "Fecha", all = TRUE)
 names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi")
 data.B_S = merge(data.B_S, data.Yanuncaypucan, by = "Fecha", all = TRUE)
@@ -624,13 +473,17 @@ data.B_S = data.B_S[data.B_S$Fecha >= fecha.min & data.B_S$Fecha <=fecha.max,]
 df.obs = data.B_S
 
 # Downscalling ---------------------------------------------------------------
-
+rm(data.B_S, data.CebollarPTAPM, data.Huizhil, data.Totoracocha, data.Yanuncaypucan, micro.Bermejos)
 rm(data.Ventanas, data.Izcairrumi, data.Yanuncaypucan, data.SoldadosPTARM, data.B_S, directory, dir.satelital, micro.Bermejos)
 
-fc  = factor.correccion(df.obs, df.sat, 10)
+fc  = factor.correccion(df.obs, df.sat, 5)  # con los RF-MEP
+fc_biascrud = MC.bIAS(df.obs, df.sat, 5)  # con los RF-MEP puro
 
-fc_biascrud = MC.bIAS(df.obs, df.sat, 10)
-fc_biasfc = MC.bIAS(df.obs, fc, 10)  # mapeo de cuantiles a los datos quue estan con fc
+fc.2 = fc[, c("Fecha", "prec_correg")]
+df.obs.2 = which(format(df.obs$Fecha, "%m-%d") == "02-29")
+df.obs.1 = df.obs[-df.obs.2,]
+fc_biasfc = MC.bIAS(df.obs.1, fc.2, 5)  # mapeo de cuantiles a los datos quue estan con fc
 
-dir.sve = "C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_2/Downscalling/prec_microcuencas"
-write.csv(fc_biascrud, paste(dir.sve, "/Micro_Yanuncay.csv", sep = ""))
+
+# dir.sve = "C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_2/Downscalling/prec_microcuencas"
+# write.csv(fc_biascrud, paste(dir.sve, "/Micro_Yanuncay.csv", sep = ""))
