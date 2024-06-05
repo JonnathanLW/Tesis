@@ -11,7 +11,6 @@
 
 # Librerías requeridas ---------------------------------------------------------
 library(data.table)
-library(fitdistrplus)
 library(dplyr)
 library(tidyr)
 #library(knitr)
@@ -21,8 +20,8 @@ library(MASS)
 library(svDialogs)
 
 # preparación de datos ---------------------------------------------------------
-directory = "C:/Users/Jonna/Desktop/Nueva carpeta"
-data = read.table(file.path(directory, "Yanuncay (800 NTREE).csv"), 
+directory = "C:/Users/Jonna/Desktop/Sequias/"
+data = read.table(file.path(directory, "Caudal(400)-FINAL.csv"), 
                   header = TRUE, sep = ",")
 data = data[,-1]
 names(data) = c("TIMESTAMP", "Lluvia_Tot")
@@ -48,22 +47,18 @@ names(data.mensual) = c("date", "pp")
 # ------------------------------------------------------------------------------
 ############################ Funciones para calculos ###########################
 best.dist = function(){
-  
-  data.mensual = as.vector(data.mensual$pp)
   #Distribución Exponencial
-  ajuste.exponencial = fitdistr(data.mensual, "exponential")
+  ajuste.exponencial = fitdistr(data.mensual$pp, "exponential")
   
   # Distribución de probabilidad gamma
-  
-  ajuste.gamma  = fitdist(data.mensual$pp, "gamma")
+  ajuste.gamma  = fitdistr(data.mensual$pp, "gamma")
   
   # Ajuste de la distribución Log-Normal
   ajuste.LogNorm = fitdistr(data.mensual$pp, "log-normal") 
   
   
   # Ajuste de la distribución Weibull
-  # ajuste.weibull = fitdistr(data.mensual$pp, "weibull") 
-  ajuste.weibull = fitdist(data.mensual$pp, "weibull")
+  ajuste.weibull = fitdistr(data.mensual$pp, "weibull") 
   
   
   # Ajuste de la distribución Normal
@@ -151,6 +146,9 @@ SPI = function(ds){
 ######################### Llamado a funciones y Gráficos #######################
 distribucion = best.dist()
 SPI = SPI("Weibull")
+
+
+
 
 # 1.0 Gráfica de las series SPI
 SPI.serie = cbind(as.character(data.mensual$date), SPI)
