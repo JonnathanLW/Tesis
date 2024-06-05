@@ -410,80 +410,45 @@ rename = function(data) {
 }
 # ------------------------------------------------------------------------------
 # Cargar datos Satelitales -----------------------------------------------------
-dir.satelital = "C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_2/Downscalling/prec_microSatel"
-micro.Bermejos = read.csv(paste(dir.satelital, "/Micro_Yanuncay.csv", sep = "")) # Probar con MSWEP puro y el MSWEP RANDON FOREST
+dir.satelital = "C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_4/Data_test"
+micro.Bermejos = read.csv(paste(dir.satelital, "/Prec_CuencaYanuncay.csv", sep = "")) # Probar con MSWEP puro y el MSWEP RANDON FOREST
 micro.Bermejos = rename(micro.Bermejos)
 fecha.min = min(micro.Bermejos$Fecha)
 fecha.max = max(micro.Bermejos$Fecha)
 df.sat = micro.Bermejos
 # Cargar datos Observados -------------------------------------------------------
-directory = "C:/Users/Jonna/Desktop/Randon_Forest/Estaciones_Tierra/Diario"
-data.Huizhil = read.csv(paste(directory, "/Huizhil.csv", sep = ""))
-data.Totoracocha = read.csv(paste(directory, "/Totoracocha.csv", sep = ""))
-data.CebollarPTAPM = read.csv(paste(directory, "/CebollarPTAPM.csv", sep = ""))
-
-# data.Ventanas = read.csv(paste(directory, "/Ventanas.csv", sep = ""))
-data.Yanuncaypucan = read.csv(paste(directory, "/YanuncayPucan.csv", sep = ""))
-# data.Izcairrumi = read.csv(paste(directory, "/Izhcayrrumi.csv", sep = ""))
-# 
-# data.SoldadosPTARM = read.csv(paste(directory, "/SoldadosPTARM.csv", sep = ""))
-data.Huizhil = rename(data.Huizhil)
-data.Totoracocha = rename(data.Totoracocha)
-data.CebollarPTAPM = rename(data.CebollarPTAPM)
-
-
-data.Ventanas = rename(data.Ventanas)
-data.Izcairrumi = rename(data.Izcairrumi)
-data.Yanuncaypucan = rename(data.Yanuncaypucan)
-data.SoldadosPTARM = rename(data.SoldadosPTARM)
-
-summary(data.SoldadosPTARM)
-data.SoldadosPTARM = data.SoldadosPTARM[!is.na(data.SoldadosPTARM$Fecha),]
-summary(data.SoldadosPTARM)
-summary(data.Yanuncaypucan)
-data.Yanuncaypucan$prec = replace(data.Yanuncaypucan$prec, data.Yanuncaypucan$prec > 500, NA)
-summary(data.Yanuncaypucan)
-
-# Promedio de las estaciones Ventanas e Izcairrumi (Observadas)
-data.B_S = merge(data.Huizhil, data.Totoracocha, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "Huizhil", "Totoracocha")
-data.B_S = merge(data.B_S, data.CebollarPTAPM, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "Huizhil", "Totoracocha", "CebollarPTAPM")
-data.B_S = merge(data.B_S, data.Yanuncaypucan, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "Huizhil", "Totoracocha", "CebollarPTAPM", "Yanuncaypucan")
-
-
-data.B_S = merge(data.Ventanas, data.Izcairrumi, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi")
-data.B_S = merge(data.B_S, data.Yanuncaypucan, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "Yanuncaypucan")
-data.B_S = merge(data.B_S, data.SoldadosPTARM, by = "Fecha", all = TRUE)
-names(data.B_S) = c("Fecha", "Ventanas", "Izcairrumi", "Yanuncaypucan", "SoldadosPTARM")
-summary(data.B_S)
-
-# promedio de la precipitacion de las estaciones
-data.B_S$promedio = apply(data.B_S[,2:5], 1, mean, na.rm = TRUE)
-data.B_S = data.B_S[,c(1,6)]
-#obtener la fecha mínima donde la columna promedio no sea NA
-min_date = min(data.B_S$Fecha[!is.na(data.B_S$promedio)])
-data.B_S = data.B_S[data.B_S$Fecha >= min_date,]
-summary(data.B_S)
-
-data.B_S = data.B_S[data.B_S$Fecha >= fecha.min & data.B_S$Fecha <=fecha.max,]
+directory = "C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_4/Data_test"
+data.B_S = read.csv(paste(directory, "/Prec_EstacionesTierraCuencaYanuncay.csv", sep = ""))
+data.B_S = rename(data.B_S)
 df.obs = data.B_S
 
 # Downscalling ---------------------------------------------------------------
-rm(data.B_S, data.CebollarPTAPM, data.Huizhil, data.Totoracocha, data.Yanuncaypucan, micro.Bermejos)
-rm(data.Ventanas, data.Izcairrumi, data.Yanuncaypucan, data.SoldadosPTARM, data.B_S, directory, dir.satelital, micro.Bermejos)
+rm(data.B_S, micro.Bermejos)
 
-fc  = factor.correccion(df.obs, df.sat, 5)  # con los RF-MEP
-fc_biascrud = MC.bIAS(df.obs, df.sat, 5)  # con los RF-MEP puro
+fc_biascrud = MC.bIAS(df.obs, df.sat, 10)  # con los RF-MEP puro
 
+resulados.1 = data.frame(
+  O_Sp = gof(fc_biascrud$prec_Sat, fc_biascrud$prec_obser), # Set de datos original vs Satelital puro
+  O_Qm = gof(fc_biascrud$prec_QM, fc_biascrud$prec_obser) # Set de datos original vs Cuantil Mapping 
+)
+
+# Metodo 2
+fc  = factor.correccion(df.obs, df.sat, 10)  # con los RF-MEP
 fc.2 = fc[, c("Fecha", "prec_correg")]
 df.obs.2 = which(format(df.obs$Fecha, "%m-%d") == "02-29")
 df.obs.1 = df.obs[-df.obs.2,]
-fc_biasfc = MC.bIAS(df.obs.1, fc.2, 5)  # mapeo de cuantiles a los datos quue estan con fc
+fc_biasfc = MC.bIAS(df.obs.1, fc.2, 10)  # mapeo de cuantiles a los datos quue estan con fc
 
+resulados.2 = data.frame(
+  O_Sp = gof(fc_biasfc$prec_Sat, fc_biasfc$prec_obser), # Set de datos original vs Satelital + fc
+  O_Qm = gof(fc_biasfc$prec_QM, fc_biasfc$prec_obser) # Set de datos original vs Cuantil Mapping (Satelital + fc)
+)
 
-# dir.sve = "C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_2/Downscalling/prec_microcuencas"
-# write.csv(fc_biascrud, paste(dir.sve, "/Micro_Yanuncay.csv", sep = ""))
+resultados.final = data.frame(
+  Estadistico = rownames(resulados.1),
+  SatPuro_Obs = resulados.1$O_Sp,
+  QMSatPuro_Obs = resulados.1$O_Qm,
+  SatFC_Obs = resulados.2$O_Sp,
+  QMSatFC_Obs = resulados.2$O_Qm
+)
+
