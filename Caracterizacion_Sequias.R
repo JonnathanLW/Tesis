@@ -1,5 +1,5 @@
 #VERSION 2.1.0
-#---------------------------------------------------------
+#Caracterizacion y exclusion---------------------------------------------------------
 
 # Cargar librerías necesarias
 library(dplyr)
