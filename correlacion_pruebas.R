@@ -4,8 +4,11 @@ names(prec) = c("Fecha", "prec")
 prec$Fecha = as.Date(prec$Fecha, format = "%Y-%m-%d")
 
 # Cargamos caudales
-caudal = read.csv("C:/Users/Jonna/Desktop/Randon_Forest/Caudales/YanuncayAjTarqui.csv", header = TRUE)
-caudal$TIMESTAMP = as.Date(caudal$TIMESTAMP, format = "%Y-%m-%d")
+caudal = read.csv("C:/Users/marco/OneDrive - ucuenca.edu.ec/Datos_estaciones/Satelite-Prec/Yanuncay_finalUDA2_(400 NTREE).csv", header = TRUE)
+caudal$Fecha = as.Date(caudal$Fecha, format = "%Y-%m-%d")
+#ELIMINAR PRIMERA COLUMNA
+caudal = caudal[, c("Fecha", "caudal")]
+#caudal = caudal[, c("Fecha", "caudal_rellenado")]
 names(caudal) = c("Fecha", "nivel")
 
 convertir.caudal = function(df){
@@ -30,8 +33,8 @@ convertir.caudal = function(df){
   # selecciono las columnas que me interesan
   # df = df[,c("TIMESTAMP", "Caudal")]
   # voy filtrando por fechas de interés
-  fecha.min = as.Date("2014-05-14")
-  fecha.max = as.Date("2023-06-06")
+  fecha.min = as.Date("2014-07-04")
+  fecha.max = as.Date("2023-12-12")
   df = df[(df$TIMESTAMP >= fecha.min & df$TIMESTAMP <= fecha.max),]
   return(df)
 }
@@ -39,7 +42,35 @@ convertir.caudal = function(df){
 caudal = convertir.caudal(caudal)
 caudal = caudal[, c("TIMESTAMP", "Caudal")]
 names(caudal) = c("Fecha", "caudal")
+summary(caudal)
 
+#realizar una grafica de la serie de tiempo con ggplot2 en la que se muestre la serie de tiempo de caudal, asi como la leyenda y los ejes bien definidos
+library(ggplot2)
+library(scales)
+
+ggplot(caudal, aes(x = Fecha, y = caudal)) +
+  geom_line(color = "steelblue", size = 1) +
+  labs(title = "Serie de tiempo de caudal para la cuenca Yanuncay",
+       x = "Fecha",
+       y = "Caudal (m³/s)") +
+  scale_x_date(date_labels = "%Y", date_breaks = "year", limits = c(as.Date("2014-01-01"), NA)) +
+  scale_y_continuous(labels = comma) +
+  theme_minimal() +
+  theme(axis.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(size = 10),
+        plot.title = element_text(size = 14, face = "bold"),
+        legend.title = element_text(size = 10, face = "bold"),
+        legend.text = element_text(size = 8),
+        panel.grid.major = element_line(color = "gray90", linetype = "dashed"),
+        panel.grid.minor = element_blank()) +
+  guides(color = guide_legend(title = "Caudal", override.aes = list(color = "steelblue")))
+
+
+
+
+#Guardar un csv con los valores de caudal
+write.csv(caudal, "C:/Users/marco/OneDrive - ucuenca.edu.ec/Datos_estaciones/Relleno/Caudal(400)-FINAL.csv", row.names = FALSE)
+summary(caudal)
 df = merge(prec, caudal, by = "Fecha", all = TRUE)
 df = df[,c("caudal", "prec")]
 data = na.omit(df)
