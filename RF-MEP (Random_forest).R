@@ -23,17 +23,18 @@ library(data.table)
 
 # ------------------------------------------------------------------------------
 # Cargo datos necesarios
-directory = "C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_2"
+directory = "C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_4"
 YanuncayPPts = fread(file.path(directory, "YanunTomebPpts.csv"))
 YanuncayPPts = data.frame(YanuncayPPts)
-names(YanuncayPPts) = c("TIMESTAMP", "M001", "M002", "M003", "M004", "M005", "M006", "M007")
+names(YanuncayPPts) = c("TIMESTAMP", "M001", "M002", "M003", "M004", "M005", "M006", "M007",
+                        "M008", "M009", "M010")
 YanuncayPPts = zoo::zoo(YanuncayPPts[, -1], order.by = as.Date(YanuncayPPts$TIMESTAMP))
 
 YanuncayPPgis = fread(file.path(directory, "YanunTomebPPgis.csv"))
 YanuncayPPgis = data.frame(YanuncayPPgis)
 
 # Área de la cuenca del Yanuncay 
-YanuncaySHP = st_read("C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_2/Shape_YanunTomeb/YanunTomeb_res43.shp")
+YanuncaySHP = st_read("C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_3/Shape_train/Area_train_4326.shp")
 YanuncaySHP = st_transform(YanuncaySHP, crs = 4326)
 
 # preparo mis estaciones
@@ -48,12 +49,12 @@ ggplot() +
   theme_minimal()
 
 # Cargo datos satelitales y DEM
-MSWEP = brick(paste0(directory, "/Img_0.1/MSWEP_resampling_4326.nc"))
-MSWEP = MSWEP[[134:3444]]
+MSWEP = brick(paste0(directory, "/Layers_Input_train/MSWEP_resampling_4326.nc"))
+# MSWEP = MSWEP[[134:3444]]
 res(MSWEP)
 nlayers(MSWEP)
 
-DEM = raster(paste0(directory, "/Img_0.1/DEM_resampling_4326.nc"))
+DEM = raster(paste0(directory, "/Layers_Input_train/DEM_resampling_4326.nc"))
 #crs(DEM) <- "+proj=longlat +datum=WGS84 +no_defs "
 res(DEM)
 
@@ -107,12 +108,16 @@ covariates.utm = list(mswep=MSWEP10KM.utm, dem=YanuncayDEM.utm)
 rfmep = RFmerge(x=YanuncayPPts, metadata=YanuncayPPgis.utm, cov=covariates.utm,
                  id="ID", lat="lat", lon="lon",  mask=YanuncaySHP.utm, 
                  training=0.8, write2disk=FALSE)
+capa.1 = rfmep[[1]]
 
 plot(rfmep[[1]])
 plot(YanuncaySHP.utm, add=TRUE)
 
 # ------------------------------------------------------------------------------
 # Guardo el modelo
-setwd("C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_2/Img_0.1/Algoritmo_entrenado")
+setwd("C:/Users/Jonna/Desktop/Randon_Forest/Algoritmo RF_4/modelo_entrenado")
 save(rfmep, file = "rfmep.RData")
 raster::writeRaster(rfmep, filename="Modelo_01.nc", format="CDF", overwrite=TRUE)
+raster::writeRaster(capa.1, filename="capa.tif", format="GTIFF", overwrite=TRUE)
+# ver el error del modelo
+rfmep$error
