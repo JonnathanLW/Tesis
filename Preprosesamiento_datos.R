@@ -26,19 +26,23 @@ library(tools)
 library(gridExtra)
 library(ggplot2)
 # ------------------------------------------------------------------------------
-directory = "C:/Users/Jonna/Desktop/Randon_Forest/Caudales/"
-name.estacion = "BermejosAjYanuncayL5m.csv"
-nombre.estat = "BermejosAjYanuncay"
+directory = "C:/Users/marco/OneDrive - ucuenca.edu.ec/Datos_estaciones/0.1.UPDATE/Entrega/Entrega/RED ETAPA ENERO/"
+name.estacion = "FULL_archivosVentanasM 1_min5.csv"
+#nombre.estat = "TixanPTAPM"
 # ------------------------------------------------------------------------------
 data = fread(paste(directory, name.estacion, sep = "")) 
-
+#COLUMNA 1,8
+data = data[, c(1, 8)]
+summary(data)
+#datos = read.csv("C:/Users/marco/OneDrive - ucuenca.edu.ec/Datos_estaciones/0.1.UPDATE/Entrega/Entrega/RED ETAPA ENERO/Datos_diarios/VENTANAS.csv", header = TRUE, sep = ",")
+#summary(datos)
 # ------------------------------------------------------------------------------
 ####################### Funciones utilizadas (Terminado ) ######################
 control.general = function(df) {
-  # df = data # eliminar esto al final
-  df = df %>% select(c("TIMESTAMP", "level_Avg")) %>%
+   df = data # eliminar esto al final
+  df = df %>% select(c("TIMESTAMP", "Lluvia_Tot")) %>%
     mutate(TIMESTAMP = as.POSIXct(TIMESTAMP, format = "%Y-%m-%d %H:%M:%S")) %>%
-    mutate(nivel = as.numeric(level_Avg)) %>% select(c("TIMESTAMP", "nivel"))
+    mutate(prec = as.numeric(Lluvia_Tot)) %>% select(c("TIMESTAMP", "prec"))
   
   
   # Buscar fechas repetidas
@@ -61,10 +65,10 @@ control.general = function(df) {
   
   if (length(seq.fechas) != length(df$TIMESTAMP)) {
     dlg_message("Se encontraron fechas faltantes en el archivo de datos. Se procederá a completarlas con la secuencia completa.")
-  }
+    df = merge(df, data.frame(TIMESTAMP = seq.fechas), by = "TIMESTAMP", all = TRUE) # quitar all = True para evitar luego ver si hay secuencia cada 5 min
+    }
   
-  df = merge(df, data.frame(TIMESTAMP = seq.fechas), by = "TIMESTAMP", all = TRUE) # quitar all = True para evitar luego ver si hay secuencia cada 5 min
-  
+    
   # Agregar comparación para ver si los datos están cada 5 minutos.
   # Beta de verificar que los datos estén en secuencia cada 5 minutos ------------
   # Calculo la diferencia entre marcas de tiempo consecutivas
@@ -78,6 +82,8 @@ control.general = function(df) {
     df = merge(df, data.frame(TIMESTAMP = seq.fechas), by = "TIMESTAMP")
   }
   
+  
+  
   df = df[order(df$TIMESTAMP),]
   # . -----------------------------------------------------------------------
   return(df)
@@ -86,21 +92,25 @@ control.general = function(df) {
 control.rangoFijo = function(df) {
   #df = data # Eliminar esto al final
   setwd(directory)
- # Limite.superior = 100 #mm
+  Limite.superior = 100 #mm
   Limite.inferior = 0 #mm
   
   indices.inferior = which(df$prec < Limite.inferior)
- # indices.superior = which(df$prec > Limite.superior)
+  indices.superior = which(df$prec > Limite.superior)
+  atipipico.maximo = 30
+  indice.atipico = which(df$prec > atipipico.maximo)
   
-#  atipipico.maximo = 30
-  # indice.atipico = which(df$prec > atipipico.maximo)
-  # if (any(indice.atipico)) {
-  #   dlg_message("Se encontraron datos atípicos superiores a 30 mm. Se procederá a eliminarlos.")
-  #   # eliminar filas con datos atípicos
-  #   datos.umbral30= df[indice.atipico, ]
-  #   Atipico.Sup30mm <<- datos.umbral30
-  #   df$prec[indice.atipico] = NA
-  # }
+  if (any(indice.atipico)) {
+  dlg_message("Se encontraron datos atípicos superiores a 30 mm. Se procederá a eliminarlos.")
+  # eliminar filas con datos atípicos
+  datos.umbral30= df[indice.atipico, ]
+  Atipico.Sup30mm <<- datos.umbral30
+  df$prec[indice.atipico] = NA
+  }
+  
+
+  
+  
   
   # divido mi df POR AÑOS
   año = year(df$TIMESTAMP)
@@ -110,24 +120,25 @@ control.rangoFijo = function(df) {
   graficos = list()
   
   # Creo carpera para guardar los gráficos
-  if (!dir.exists(paste0(directory, "G_rangoFijoCrudo"))) {
-    dir.create(paste0(directory, "G_rangoFijoCrudo"))
-  }
+  # if (!dir.exists(paste0(directory, "G_rangoFijoCrudo"))) {
+  #   dir.create(paste0(directory, "G_rangoFijoCrudo"))
+  # }
+  # 
+  # for (i in 1:length(año)) {
+  #   df.año = df %>% filter(year(TIMESTAMP) == año[i])
+  #   p.1 = ggplot(df.año, aes(x = TIMESTAMP, y = prec)) +
+  #     geom_line(color = "blue") +
+  #     labs(title = paste("Precipitación en el año", año[i]), x = "Fecha", y = "Nivel (cm)") +
+  #     theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+  #   graficos[[i]] = p.1
+  # }
   
-  for (i in 1:length(año)) {
-    df.año = df %>% filter(year(TIMESTAMP) == año[i])
-    p.1 = ggplot(df.año, aes(x = TIMESTAMP, y = nivel)) +
-      geom_line(color = "blue") +
-      labs(title = paste("Niveles de agua en el año", año[i]), x = "Fecha", y = "Nivel (cm)") +
-      theme(plot.title = element_text(hjust = 0.5, face = "bold"))
-    graficos[[i]] = p.1
-  }
   
   # guardo mi gráfico en la carpeta
-  p.f = grid.arrange(grobs = graficos)
-  ggsave(paste0(directory, "G_rangoFijoCrudo/", nombre.estat, "_rangoFijo.png"),
-         plot = p.f, width = 12, height = 8, units = "in", dpi = 300, type = "cairo")
-  
+  # p.f = grid.arrange(grobs = graficos)
+  # ggsave(paste0(directory, "G_rangoFijoCrudo/", nombre.estat, "_rangoFijo.png"),
+  #        plot = p.f, width = 12, height = 8, units = "in", dpi = 300, type = "cairo")
+  # 
   # . -----------------------------------------------------------------------
   
   if (any(indices.inferior)) {
@@ -142,96 +153,28 @@ control.rangoFijo = function(df) {
     dlg_message("No se encontraron valores inferiores al limite inferior.")
   }
   
-  # if (any(indices.superior)) {
-  #   dlg_message(paste("Se encontraron valores superiores al limite superior. Antes de eliminarlos reviselos los graficos generados en", paste0(directory, "G_rangoFijoCrudo/", nombre.estat, "_rangoFijo.png")))
-  #   datos.superior = df[indices.superior, ]
-  #   datos.LimiteSup <<- datos.superior
-  #   View(datos.superior)
-  #   
-  #   res = dlg_message("Desea eliminar los datos superiores al limite superior?", type = "yesno")$res
-  #   if (res == "yes") {
-  #     df$prec[indices.superior] = NA
-  #   } else {
-  #     df = df
-  #   }
-  #   
-  # } else {
-  #   dlg_message("No se encontraron valores superiores al limite superior.")
-  # }
+  if (any(indices.superior)) {
+    dlg_message(paste("Se encontraron valores superiores al limite superior. Antes de eliminarlos reviselos los graficos generados en", paste0(directory, "G_rangoFijoCrudo/", nombre.estat, "_rangoFijo.png")))
+    datos.superior = df[indices.superior, ]
+    datos.LimiteSup <<- datos.superior
+    View(datos.superior)
+
+     res = dlg_message("Desea eliminar los datos superiores al limite superior?", type = "yesno")$res
+     if (res == "yes") {
+       df$prec[indices.superior] = NA
+     } else {
+       df = df
+     }
+  
+   } else {
+     dlg_message("No se encontraron valores superiores al limite superior.")
+   }
+
+  
+  nrow(data)
+  summary(data)
   
   
-  # 
-  # if (any(indices.superior)) {
-  #   dlg_message("Se encontraron valores superiores al limite superior. Se procederá a verificar los datos.")
-  #   datos.superior = df[indices.superior, ]
-  #   datos.LimiteSup <<- datos.superior
-  # 
-  #   k = as.numeric(dlg_input("Ingrese el número de estaciones cercanas para la comprobación de los datos superiores al limite superior")$res)
-  #   if (k == 1) {
-  #     dlg_message("Se cargará una estación cercana para la comprobación de los datos superiores al limite superior")
-  #     estacion.1 = dlg_open("Seleccione el archivo de datos de la estación cercana")$res
-  #     name.1 = basename(estacion.1)
-  #     estacion.1 = read.table(estacion.1, header = TRUE, sep = ",")
-  #     estacion.1  = control.general(estacion.1)
-  #     estacion =  which(estacion.1$TIMESTAMP %in% datos.superior$TIMESTAMP)
-  #     estacion.1 = estacion.1[estacion, ]
-  #     
-  #     name.1 = sub("_min5.csv", "", name.1)
-  #     name.o = sub("_min5.csv", "", name.estacion)
-  #     
-  #     comparacion = merge(datos.superior, estacion.1, by = "TIMESTAMP", all = TRUE)
-  #     names(comparacion) = c("TIMESTAMP", paste("prec_", name.o, sep = ""), paste("prec_", name.1, sep = ""))
-  #     comparacion.estaciones <<- comparacion
-  #     View(comparacion)
-  #     
-  #     res = dlg_message("Desea eliminar los datos superiores al limite superior?", type = "yesno")$res
-  #     if (res == "yes") {
-  #       df$prec[indices.superior] = NA
-  #     } else {
-  #       df = df
-  #     }
-  # 
-  #   } else if (k == 2) {
-  #     dlg_message("Se cargarán dos estaciones cercanas para la comprobación de los datos superiores al limite superior")
-  #     estacion.1 = dlg_open("Seleccione el archivo de datos de la primera estación cercana")$res
-  #     name.1 = basename(estacion.1)
-  #     estacion.2 = dlg_open("Seleccione el archivo de datos de la segunda estación cercana")$res
-  #     name.2 = basename(estacion.2)
-  #     estacion.1 = read.table(estacion.1, header = TRUE, sep = ",")
-  #     estacion.2 = read.table(estacion.2, header = TRUE, sep = ",")
-  #     estacion.1 = control.general(estacion.1)
-  #     estacion.2 = control.general(estacion.2)
-  #     
-  #     estacion =  which(estacion.1$TIMESTAMP %in% datos.superior$TIMESTAMP)
-  #     estacion.1 = estacion.1[estacion, ]
-  #     
-  #     estacion2 =  which(estacion.2$TIMESTAMP %in% datos.superior$TIMESTAMP)
-  #     estacion.2 = estacion.2[estacion2, ]
-  #     
-  #     name.1 = sub("_min5.csv", "", name.1)
-  #     name.2 = sub("_min5.csv", "", name.2)
-  #     name.o = sub("_min5.csv", "", name.estacion)
-  #     
-  #     comparacion = merge(datos.superior, estacion.1, by = "TIMESTAMP", all = TRUE)
-  #     comparacion = merge(comparacion, estacion.2, by = "TIMESTAMP", all = TRUE)
-  #     names(comparacion) = c("TIMESTAMP", paste("prec_", name.o, sep = ""), paste("prec_", name.1, sep = ""), paste("prec_", name.2, sep = ""))
-  #     comparacion.estaciones <<- comparacion
-  #     View(comparacion)
-  
-  #     res = dlg_message("Desea eliminar los datos superiores al limite superior?", type = "yesno")$res
-  #     if (res == "yes") {
-  #       df$prec[indices.superior] = NA
-  #     } else {
-  #       df = df
-  #     }
-  #     
-  #   } else {
-  #     dlg_message("El script no soporta mas de dos estaciones cercanas")
-  #     stop("Se admite unicamente uno o dos estaciones cercanas")
-  #   }
-  # } else {
-  #   dlg_message("No se encontraron valores superiores al limite superior.")
-  # }
   # directorio.save = paste0(directory, "Datos.1/")
   # write.csv(df, paste0(directorio.save, name.estacion), row.names = FALSE)
   return(df)
@@ -462,8 +405,8 @@ datos.faltantes.diario = function(df) {
   }
   
   p.f = grid.arrange(grobs = graficos)
-  # ggsave(paste0(directory, "G_agrupacionDiaria/", nombre.estat, "_diario.png"),
-  #        plot = p.f, width = 12, height = 8, units = "in", dpi = 300, type = "cairo")
+   ggsave(paste0(directory, "G_agrupacionDiaria/", nombre.estat, "_diario.png"),
+          plot = p.f, width = 12, height = 8, units = "in", dpi = 300, type = "cairo")
   
   
   # Guardo los datos diarios
@@ -476,6 +419,23 @@ datos.faltantes.diario = function(df) {
   return(df)
   
 }
+
+# #crear una secuencia desde (2014-07-04) hasta (2023-12-12)
+# secuencia=seq(as.Date("2014-07-04"), as.Date("2023-12-12"), by = "1 day")
+# #secuencia as data frame
+# secuencia=data.frame(secuencia)
+# #merge secuencia con df
+# df=merge(secuencia, df, by.x = "secuencia", by.y = "TIMESTAMP", all = TRUE)
+# # #limitar la fecha minima y maxima
+# # df = df %>% filter(secuencia >= as.Date("2014-07-04") & secuencia <= as.Date("2023-12-12"))
+# # summary(df)
+# # #Guaradar csv
+# # write.csv(df, "C:/Users/marco/OneDrive - ucuenca.edu.ec/Datos_estaciones/0.1.UPDATE/Entrega/Entrega/RED ETAPA ENERO/Datos_diarios/TixanPTAPM-1.csv", row.names = FALSE)
+# # #merge entre seq
+
+
+
+
 
 
 datos.faltantes.mensual = function(df) {
