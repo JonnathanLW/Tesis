@@ -7,215 +7,227 @@ proces = function(df, name) {
   df$date = as.Date(df$date, format = "%Y-%m-%d")
   return(df)
 }
-# Funciones principales --------------------------------------------------------
 
 # Preparación de datos ---------------------------------------------------------
 # Cargar de datos de SSI y SPI y merge
 SPI = read.csv("C:/Users/Jonna/Desktop/Sequias/SPI.csv")
 SSI = read.csv("C:/Users/Jonna/Desktop/Sequias/SSI.csv")
 SPI = proces(SPI, "SPI")
+SPI$evento = seq(1, nrow(SPI))
 SSI = proces(SSI, "SSI")
 
-# Calculo de tc (tiempo critico) -----------------------------------------------
-threshold = -0.5
-
-# # Identificar corridas negativas para SPI
-# spi_data = SPI %>%
-#   mutate(run_spi = ifelse(SPI < threshold, 1, 0)) %>%
-#   mutate(run_id_spi = cumsum(c(0, diff(run_spi) != 0)))
-# 
-# # Identificar corridas negativas para SSI
-# ssi_data = SSI %>%
-#   mutate(run_ssi = ifelse(SSI < threshold, 1, 0)) %>%
-#   mutate(run_id_ssi = cumsum(c(0, diff(run_ssi) != 0)))
-# 
-# # Calcular la duración crítica para SPI
-# spi_negative_runs = spi_data %>%
-#   filter(run_spi == 1) %>%
-#   group_by(run_id_spi) %>%
-#   summarise(duration = n()) 
-# 
-# t_c_spi = max(spi_negative_runs$duration)
-# 
-# # Calcular la duración crítica para SRI
-# ssi_negative_runs = ssi_data %>%
-#   filter(run_ssi == 1) %>%
-#   group_by(run_id_ssi) %>%
-#   summarise(duration = n())
-# 
-# t_c_ssi =max(ssi_negative_runs$duration)
-# 
-# 
-# # Caracterizar las sequías
-# results.SPI = data.frame()
-# for (i in 1:length(spi_negative_runs$run_id_spi)) {
-#   start_date = min(spi_data$date[spi_data$run_id_spi == spi_negative_runs$run_id_spi[i]])
-#   end_date = max(spi_data$date[spi_data$run_id_spi == spi_negative_runs$run_id_spi[i]])
-#   duration = spi_negative_runs$duration[i]
-#   magnitude = sum(spi_data$SPI[spi_data$run_id_spi == spi_negative_runs$run_id_spi[i]] - threshold) # verificar calculo de magnitud 
-#   intensity = magnitude / duration
-#   results.SPI = rbind(results.SPI, data.frame(start_date, end_date, duration, magnitude, intensity))
-# }
-# 
-# results.SSI = data.frame()
-# for (i in 1:length(ssi_negative_runs$run_id_ssi)) {
-#   start_date = min(ssi_data$date[ssi_data$run_id_ssi == ssi_negative_runs$run_id_ssi[i]])
-#   end_date = max(ssi_data$date[ssi_data$run_id_ssi == ssi_negative_runs$run_id_ssi[i]])
-#   duration = ssi_negative_runs$duration[i]
-#   magnitude = sum(ssi_data$SSI[ssi_data$run_id_ssi == ssi_negative_runs$run_id_ssi[i]] - threshold) # verificar calculo de magnitud 
-#   intensity = magnitude / duration
-#   results.SSI = rbind(results.SSI, data.frame(start_date, end_date, duration, magnitude, intensity))
-# }
-
-
-# Agrupacion 2 -----------------------------------------------------------------
-drought_threshold =-0.5
-
-# Función para identificar eventos de sequía
-identify_droughts =function(ssi, threshold) {
-  droughts =list()
-  in_drought =FALSE
-  start_month =0
-  deficit_volume =0
+# Teoria de las corridas -------------------------------------------------------
+teori.run = function(df) {
+  dry_thresh = -0.5
+  wet_thresh = 0.5
   
-  for (i in 1:length(ssi)) {
-    if (ssi[i] < threshold) {
-      if (!in_drought) {
-        in_drought =TRUE
-        start_month =i
+  events = list()
+  event_start = 0
+  event_type = 0 # 0 = ninguno, -1 = seco, 1 = húmedo
+  
+  for (i in 1:length(df)) {
+    if (df[i] < dry_thresh) {
+      if (event_type != -1) {
+        event_start = i
+        event_type = -1
       }
-      deficit_volume =deficit_volume + ssi[i]
+      
+    } else if (df[i] > wet_thresh) {
+      if (event_type != 1) {
+        event_start = i
+        event_type = 1
+      }
     } else {
-      if (in_drought) {
-        in_drought =FALSE
-        end_month =i - 1
-        duration =end_month - start_month + 1
-        excess_volume =sum(ssi[seq(end_month + 1, i - 1)][ssi[seq(end_month + 1, i - 1)] > 0])
-        droughts =c(droughts, list(list(start = start_month, end = end_month, duration = duration,
-                                          deficit_volume = -deficit_volume, excess_volume = excess_volume)))
-        deficit_volume =0
+      if (event_type != 0) {
+        event_end = i - 1
+        event_dur = event_end - event_start + 1
+        event_mag = sum(abs(df[event_start:event_end]))
+        event_sev = event_mag / event_dur
+        vi = sum(df[event_start:event_end] - dry_thresh)
+        vd = sum(dry_thresh - df[event_start:event_end])
+        
+        if (event_type == -1) {
+          event_sev = -event_sev
+        }
+        events[[length(events) + 1]] = list(type = event_type, start = event_start, end = event_end, duration = event_dur, 
+                                            magnitude = event_mag, 
+                                            severity = event_sev,
+                                            vi = vi,
+                                            vd = vd)
+        event_type = 0
       }
     }
   }
   
-  return(droughts)
+  return(events)
 }
 
-
-# Identificar eventos de sequía
-drought_eventsSPI =identify_droughts(SPI$SPI, drought_threshold)
-drought_eventsSSI =identify_droughts(SSI$SSI, drought_threshold)
-
-
-# Definir funciones para agrupar eventos de sequía
-pool_droughts =function(drought_events, pc = 0.4, tc = tc) {
-  pooled_droughts =list()
-  i =1
-  
-  while (i < length(drought_events)) {
-    current_drought =drought_events[[i]]
-    next_drought =drought_events[[i + 1]]
-    
-    # Calcular intervalo de tiempo y ratio de exceso de volumen
-    time_interval =next_drought$start - current_drought$end
-    excess_volume_ratio =next_drought$excess_volume / current_drought$deficit_volume
-    
-    if (time_interval <= tc & excess_volume_ratio <= pc) {
-      # Agrupar eventos de sequía
-      pooled_duration =current_drought$duration + next_drought$duration + time_interval
-      pooled_deficit =current_drought$deficit_volume + next_drought$deficit_volume + next_drought$excess_volume
-      pooled_drought =list(start = current_drought$start, end = next_drought$end, duration = pooled_duration, deficit_volume = pooled_deficit)
-      pooled_droughts =c(pooled_droughts, list(pooled_drought))
-      i =i + 2
+sep.eventos = function(eventos, n){
+  df = lapply(eventos, function(evento) {
+    if (evento$type == n) {
+      return(evento)
     } else {
-      pooled_droughts =c(pooled_droughts, list(current_drought))
-      i =i + 1
+      return(NULL)
+    }
+  })
+  
+  df = Filter(Negate(is.null), df)
+  return(df)
+}
+
+events.SPI = teori.run(SPI$SPI)
+SPI.sequia = sep.eventos(events.SPI, -1)
+SPI.humeda = sep.eventos(events.SPI, 1)
+
+events.SSI = teori.run(SSI$SSI)
+SSI.sequia = sep.eventos(events.SSI, -1)
+SSI.humeda = sep.eventos(events.SSI, 1)
+#-------------------------------------------------------------------------------
+# Pooling ----------------------------------------------------------------------
+# Función para agrupar eventos adyacentes
+pooling = function(evento, tc, pc){
+  eventos_agrupados = list()
+  # Verifica si la lista 'evento' está vacía
+  if (length(evento) == 0) {
+    stop("La lista de eventos está vacía")
+    return(eventos_agrupados)
+  }
+  t.yo = 0
+  p.yo = 0
+  while (t.yo <= tc || p.yo <= pc) {
+    for (i in 1:(length(evento) - 1)) {
+      # Verifica que el índice esté dentro del rango válido
+      if (i >= 1 && i <= length(evento) - 1) {
+        evento.actual = evento[[i]]
+        evento.siguiente = evento[[i + 1]]
+        t.yo = evento.siguiente$start - evento.actual$end - 1
+        v = evento.actual$vi + evento.siguiente$vi
+        s = evento.actual$vi
+        p.yo = v/s
+        if (t.yo <= tc && p.yo <= pc) {
+          evento.agrupado = list(type = evento.actual$type,
+                                 start = evento.actual$start,
+                                 end = evento.siguiente$end,
+                                 duration = evento.actual$duration + evento.siguiente$duration + t.yo,
+                                 severity = evento.actual$severity + evento.siguiente$severity + p.yo)
+          eventos_agrupados[[length(eventos_agrupados) + 1]] = evento.agrupado
+        } else {
+          if (i <= 10) {
+            eventos_agrupados[[length(eventos_agrupados) + 1]] = evento.actual
+          } else {
+            eventos_agrupados[[length(eventos_agrupados) + 1]] = evento.actual
+            eventos_agrupados[[length(eventos_agrupados) + 1]] = evento.siguiente
+          }
+        }
+      } 
     }
   }
-  
-  if (i == length(drought_events)) {
-    pooled_droughts =c(pooled_droughts, list(drought_events[[i]]))
-  }
-  
-  return(pooled_droughts)
+  return(eventos_agrupados)
 }
 
-pooled_droughtsSPI =pool_droughts(drought_eventsSPI, pc = 0.4, tc = 5) # pooling
-pooled_droughtsSSI =pool_droughts(drought_eventsSSI, pc = 0.4, tc = 2) # pooling
-
+pooling.SPI = pooling(evento = SPI.sequia, tc = 5, pc = 0.4)
+pooling.SSI = pooling(evento = SSI.sequia, tc = 2, pc = 0.4)
+#-------------------------------------------------------------------------------
+# Exclusión de eventos de sequía cortos/menores --------------------------------
 # Función para excluir eventos de sequía cortos/menores
-exclude_minor_droughts =function(drought_events, rd = 0.3, rs = 0.3) {
-  filtered_droughts =list()
+exclusion = function(evento, rd, rs){
+  # evento = pooling.SPI
+  eventos_filtrados = list()
+  eventos_excluding = list()
+  duracion_media = mean(sapply(evento, function(x) x$duration))
+  severity_medio = mean(sapply(evento, function(x) x$severity))
   
-  mean_duration =mean(sapply(drought_events, function(x) x$duration))
-  mean_deficit =mean(sapply(drought_events, function(x) x$deficit_volume))
-  
-  for (drought in drought_events) {
-    if (drought$duration >= rd * mean_duration & drought$deficit_volume >= rs * mean_deficit) {
-      filtered_droughts =c(filtered_droughts, list(drought))
+  # modificar el y por el or
+  for (i in 1:length(evento)) {
+    if (evento[[i]]$duration < rd * duracion_media & evento[[i]]$severity < rs * severity_medio) {
+      
+      eventos_filtrados[[length(eventos_filtrados) + 1]] = evento[[i]]
+      
+    } else {
+      eventos_excluding[[length(eventos_excluding) + 1]] = evento[[i]]
     }
   }
-  return(filtered_droughts)
+  return(eventos_excluding)
 }
 
-
-filtered_droughtsSPI = exclude_minor_droughts(pooled_droughtsSPI, rd = 0.3, rs = 0.3) # excluding
-filtered_droughtsSSI = exclude_minor_droughts(pooled_droughtsSSI, rd = 0.3, rs = 0.3) # excluding
-
-met_droughts = filtered_droughtsSPI
-hydro_droughts = filtered_droughtsSSI
-
-# Función para emparejar eventos de sequía meteorológica e hidrológica
-# Calcular el tiempo de propagación (t_p)
-# Aquí puedes utilizar la función ccf() de R para calcular las correlaciones cruzadas
-# y encontrar el desfase con la correlación más alta
-# Por ejemplo:
-correlaciones <- ccf(SPI$SPI, SSI$SSI, lag.max = 12, plot = FALSE)
-t_p <- which.max(correlaciones$acf) - 1
-
-# Función para calcular la sequía meteorológica coincidente
-calcular_sequia_meteo <- function(trigger_inicio, trigger_fin) {
-  # Filtrar eventos de sequía meteorológica dentro del "trigger interval"
-  eventos_meteo_filtrados <- met_droughts[sapply(met_droughts, function(x) x$start >= trigger_inicio & x$end <= trigger_fin)]
-  
-  # Calcular la duración total
-  duracion_total <- sum(sapply(eventos_meteo_filtrados, function(x) x$duration))
-  
-  # Calcular la severidad total
-  severidad_total <- sum(sapply(eventos_meteo_filtrados, function(x) x$deficit_volume))
-  
-  # Restar los volúmenes de los eventos húmedos a la severidad total
-  # (Aquí debes tener una lista de eventos húmedos y filtrarlos dentro del "trigger interval")
-  # Por ejemplo:
-  eventos_humedos <- ... # Lista de eventos húmedos
-  eventos_humedos_filtrados <- eventos_humedos[sapply(eventos_humedos, function(x) x$start >= trigger_inicio & x$end <= trigger_fin)]
-  severidad_total <- severidad_total - sum(sapply(eventos_humedos_filtrados, function(x) x$volumen))
-  
-  return(list(duracion = duracion_total, severidad = severidad_total))
+exclusion.SPI = exclusion(evento = pooling.SPI, rd = 0.3, rs = 0.3)
+exclusion.SSI = exclusion(evento = pooling.SSI, rd = 0.3, rs = 0.3)
+#-------------------------------------------------------------------------------
+trigger = function(evento, tp) {
+  eventos_trigger = list()
+  for (i in 1:length(evento)) {
+    sequia = evento[[i]]
+    start = sequia$start
+    end = sequia$end
+    
+    # Cálculo del intervalo de activación
+    tsi = start
+    tei = end
+    tei_1 = end - 1
+    
+    if (tsi - tei_1 >= tp) {
+      i.act = tsi - tp
+      trigger_interval = c(i.act, tei)
+    } else {
+      trigger_interval = c(tei_1, tei)
+    }
+    eventos_trigger[[length(eventos_trigger) + 1]] = list(type = sequia$type, 
+                                                          start = start, 
+                                                          end = end, 
+                                                          trigger_interval = trigger_interval)
+  }
+  return(eventos_trigger)
 }
+trigger = trigger(evento = exclusion.SSI, tp = 3)
 
-# Calcular el "trigger interval" y la sequía meteorológica coincidente para cada evento de sequía hidrológica
-sequia_meteo_coincidente <- lapply(seq_along(hydro_droughts), function(i) {
-  evento_hidro <- hydro_droughts[[i]]
-  trigger_inicio <- evento_hidro$start - t_p
-  trigger_fin <- evento_hidro$end
-  
-  # Verificar si el "trigger interval" se superpone con el intervalo del evento anterior
-  if (i > 1) {
-    evento_hidro_anterior <- hydro_droughts[[i - 1]]
-    if (trigger_inicio < evento_hidro_anterior$end) {
-      trigger_inicio <- evento_hidro_anterior$end
+match_droughts = function(meteo_events, trigger_intervals, wet_events) {
+  matches = list()
+  for (meteo_event in meteo_events) {
+    for (trigger_event in trigger_intervals) {
+      if (meteo_event$start %in% trigger_event$trigger_interval ||
+          meteo_event$end %in% trigger_event$trigger_interval) {
+        # Calcular duración (d)
+        d = meteo_event$duration
+        
+        # Calcular severidad (s)
+        s = meteo_event$severity - sum(sapply(wet_events, function(event) {
+          if (event$start %in% trigger_event$trigger_interval || event$end %in% trigger_event$trigger_interval) {
+            return(event$severity)
+          } else {
+            return(0)
+          }
+        }))
+        matches = append(matches, list(list(meteo_event = meteo_event, trigger_event = trigger_event, duration = d, severity = s)))
+      }
     }
   }
-  
-  sequia_meteo <- calcular_sequia_meteo(trigger_inicio, trigger_fin)
-  return(sequia_meteo)
-})
+  return(matches)
+}
 
-# Calculo del TR
-spi_acum = read.csv("C:/Users/Jonna/Desktop/Sequias/SPI_acumulado(1-12).csv")
-merge.SPI_SSI = merge(spi_acum, SSI, by = "date")
-cor(merge.SPI_SSI[-1], use = "complete.obs")
-ccf(merge.SPI_SSI$SPI.1, merge.SPI_SSI$SSI, lag.max = 12, plot = FALSE)
+# Emparejar eventos utilizando los intervalos de disparo calculados
+matched_events = match_droughts(exclusion.SPI, trigger, SSI.humeda)
+#-------------------------------------------------------------------------------
+# calculo de Tr
+Tr = (length(matched_events) / length(exclusion.SPI)) * 100
+Tr
+#-------------------------------------------------------------------------------
+severidad.maches = data.frame()
+for (i in 1:length(matched_events)) {
+  severidad.maches = rbind(severidad.maches, data.frame(matched_events[[i]]$severity))
+}
+names(severidad.maches) = c("Severidad")
+write.csv(severidad.maches, "C:/Users/Jonna/Desktop/Sequias/Funcion_copula/severitymatch.csv")
 
-propagation_time = 3 # meses
+severidad.SPI = data.frame()
+for (i in 1:length(exclusion.SPI)) {
+  severidad.SPI = rbind(severidad.SPI, data.frame(exclusion.SPI[[i]]$severity))
+}
+names(severidad.SPI) = c("Severidad")
+write.csv(severidad.SPI, "C:/Users/Jonna/Desktop/Sequias/Funcion_copula/severitySPI.csv")
+
+severidad.SSI = data.frame()
+for (i in 1:length(exclusion.SSI)) {
+  severidad.SSI = rbind(severidad.SSI, data.frame(exclusion.SSI[[i]]$severity))
+}
+names(severidad.SSI) = c("Severidad")
+write.csv(severidad.SSI, "C:/Users/Jonna/Desktop/Sequias/Funcion_copula/severitySSI.csv")
