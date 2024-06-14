@@ -1,6 +1,13 @@
 # Librerías necesarias ---------------------------------------------------------
 library(dplyr)
 library(ggplot2)
+library(fitdistrplus)
+library(MASS)
+library(evir)
+library(extRemes)
+library(gamlss)
+library(evd)
+library(bbmle)
 # Funciones complementarias ----------------------------------------------------
 proces = function(df, name) {
   names(df) = c("date", name)
@@ -19,7 +26,7 @@ SSI = proces(SSI, "SSI")
 SSI$evento = seq(1, nrow(SSI))
 SSI$estado = ifelse(SSI$SSI < -0.5, "Sequia", ifelse(SSI$SSI > 0.5, "Humedo", "Normal"))
 
-# Teoría de las corridas para sequias ------------------------------------------
+# Teoría de las corridas para sequías ------------------------------------------
 teori.run <- function(df) {
   dry_thresh = -0.5
   sequias = list()
@@ -415,7 +422,142 @@ matching <- function(exclusion.SPI, trigger, SPI.humedad) {
 matched_events <- matching(exclusion.SPI, trigger, SPI.humedad)
 
 #-------------------------------------------------------------------------------
+############################### Graficos #######################################
+# crea histogramas en funcion de la severidad de SPI.humedad, en el eje y va la severidad y eje x va desde cuando inicia hasta cuando termina, el ancho del hisograma seria la duracion del evento
+# Función para graficar los eventos de sequía
+Extraer.eventos = function(eventos) {
+  starts <- sapply(eventos, function(x) x$start)
+  ends <- sapply(eventos, function(x) x$end)
+  severities <- sapply(eventos, function(x) x$severity)
+  
+  events_df <- data.frame(
+    start = starts,
+    end = ends,
+    severity = severities
+  )
+  events_df$start = as.numeric(events_df$start)
+  return(events_df)
+}
+Sequia.InicialSPI = Extraer.eventos(SPI.sequias)
+humedad = Extraer.eventos(SPI.humedad)
+Sequia.InicialSSI = Extraer.eventos(SSI.sequias)
+# Crear el DataFrame combinando los datos de SPI y SSI
+Sequia.InicialSPI$type <- "SPI"
+Sequia.InicialSSI$type <- "SSI"
+humedad$type <- "Humedad"
+combined_data <- rbind(Sequia.InicialSPI, Sequia.InicialSSI, humedad)
+combined_data$start <- as.numeric(combined_data$start)
+combined_data$end <- as.numeric(combined_data$end)
+combined_data$severity <- as.numeric(combined_data$severity)
+write.csv(combined_data, "C:/Users/Jonna/Desktop/d/combined.csv")
+
+# Crear el gráfico con ggplot2
+
+ggplot(combined_data) +
+  geom_rect(aes(xmin = start, xmax = end, ymin = 0, ymax = severity, fill = type), alpha = 1) +
+  scale_fill_manual(values = c("blue", "red", "brown")) +
+  labs(title = "Eventos iniciales de sequía", x = "Fecha de inicio", y = "Severidad") +
+  theme_minimal() +
+  scale_x_continuous(breaks = seq(0, max(combined_data$end, na.rm = TRUE), by = 10)) +
+  scale_y_continuous(breaks = seq(0, max(combined_data$severity, na.rm = TRUE), by = 0.5))
+
+
+# Exclusión de sequías gráfico --------------------------------------------
+sequias.excluidas.SPI = Extraer.eventos(exclusion.SPI)
+sequias.excluidas.SSI = Extraer.eventos(exclusion.SSI)
+sequias.excluidas.SPI$type <- "SPI"
+sequias.excluidas.SSI$type <- "SSI"
+sequias.excluidasComb = rbind(sequias.excluidas.SPI, sequias.excluidas.SSI)
+
+ggplot(sequias.excluidasComb) +
+  geom_rect(aes(xmin = start, xmax = end, ymin = 0, ymax = severity, fill = type), alpha = 0.5) +
+  scale_fill_manual(values = c("blue", "red")) +
+  labs(title = "Eventos iniciales de sequía", x = "Fecha de inicio", y = "Severidad") +
+  theme_minimal() +
+  scale_x_continuous(breaks = seq(0, max(combined_data$end, na.rm = TRUE), by = 10), limits = c(0, max(combined_data$end, na.rm = TRUE))) +
+  scale_y_continuous(breaks = seq(0, max(combined_data$severity, na.rm = TRUE), by = 0.5), limits = c(0, max(combined_data$severity, na.rm = TRUE)))
+
+#-------------------------------------------------------------------------------
 # calculo de Tr
 Tr = (length(matched_events) / length(exclusion.SPI)) * 100
 Tr
+#-------------------------------------------------------------------------------
+################################## Etapa 1 #####################################
+# Determinación de las distribuciones marginales de las variables aleatorias 
+# duración de la sequía Match junto con la severidad de las sequías meteo e hidro
+# duración de las sequías combinadas
+drought.duration = function(df){
+  duracion.match = list()
+  for (i in 1:length(df)){
+    duration = df[[i]]$match_duration
+    duracion.match[[length(duracion.match) + 1]] = duration
+  }
+  return(duracion.match)
+}
+duracion.match = drought.duration(matched_events)
+duracion.match = unlist(duracion.match)
+# severidad de la sequía meteorológica 
+severiti.meteo = function(df) {
+  severidad.meteo = list()
+  for (i in 1:length(df)){
+    severity = df[[i]]$severity
+    severidad.meteo[[length(severidad.meteo) + 1]] = severity
+  }
+  return(severidad.meteo)
+}
+severidad.meteo = severiti.meteo(exclusion.SPI)
+severidad.meteo = unlist(severidad.meteo)
+
+# severidad de la sequía hidrologica 
+severiti.hidro = function(df) {
+  severidad.hidro = list()
+  for (i in 1:length(df)){
+    severity = df[[i]]$severity
+    severidad.hidro[[length(severidad.hidro) + 1]] = severity
+  }
+  return(severidad.hidro)
+}
+severidad.hidro = severiti.hidro(exclusion.SSI)
+severidad.hidro = unlist(severidad.hidro)
+
+# Ajuste de la distribución marginal
+distribucion.match = function(df) {
+  df = as.vector(df)
+  # Ajuste de distribuciones
+  dist.weibull = fitdist(df, distr = "weibull")
+  summary(dist.weibull)
+  dist.exp = fitdist(df, distr = "exp")
+  summary(dist.exp)
+  
+  m1 <- mle2(df ~ dgev(loc, exp(logscale), shape), data = data.frame(df), 
+             start = list(loc = 0, logscale = 0, shape = 0), method = "Nelder-Mead")
+  
+  dist.gev = fitdist(df, "gev", 
+                     start= with(as.list(coef(m1)), list(loc = loc, scale = exp(logscale), shape = shape)))
+  summary(dist.gev)
+  
+  # Calculo de los AIC 
+  aic.weibull = dist.weibull$aic
+  aic.exp = dist.exp$aic
+  aic.gev = dist.gev$aic
+  
+  # Kolmogorov smirnov
+  ks.weibull = ks.test(df, "pweibull", shape = dist.weibull$estimate[1], scale = dist.weibull$estimate[2])
+  ks.exp = ks.test(df, "pexp", rate = dist.exp$estimate[1])
+  ks.gev = ks.test(df, "pgev", loc = dist.gev$estimate[1], scale = dist.gev$estimate[2], shape = dist.gev$estimate[3])
+
+
+  
+  resultados = data.frame(
+    weibull = c(aic.weibull, ks.weibull$statistic, ks.weibull$p.value),
+    exp = c(aic.exp, ks.exp$statistic, ks.exp$p.value),
+    gev = c(aic.gev, ks.gev$statistic, ks.gev$p.value))
+  rownames(resultados) = c("AIC", "estatics", "p-value KS")
+  
+  return(resultados)
+}
+
+dist.match = distribucion.match(duracion.match)
+dist.severidad.meteo = distribucion.match(severidad.meteo)
+dist.severidad.hidro = distribucion.match(severidad.hidro)
 #-------------------------------------------------------------------------------
