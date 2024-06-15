@@ -376,7 +376,7 @@ trigger = trigger(evento = exclusion.SSI, tp = 3)
 #-------------------------------------------------------------------------------
 matching <- function(exclusion.SPI, trigger, SPI.humedad) {
   matched_events <- list()
-  for (i in 1:(length(trigger)-1)) {
+  for (i in 1:(length(trigger))) {
     start_interval <- trigger[[i]]$trigger_interval[1]
     end_interval <- trigger[[i]]$trigger_interval[2]
     interval = start_interval:end_interval
@@ -392,32 +392,13 @@ matching <- function(exclusion.SPI, trigger, SPI.humedad) {
     severity <- met_sever - wet_sever
     matched_events[[i]] <- list(met_info = met_info, hum_info = hum_info, 
                                 match_severity = severity, match_duration = duration)
-    
-    if (i + 1 == (length(trigger))) {
-      start_interval <- trigger[[i + 1]]$trigger_interval[1]
-      end_interval <- trigger[[i + 1]]$trigger_interval[2]
-      
-      interval = start_interval:end_interval
-      met_events <- exclusion.SPI[sapply(exclusion.SPI, function(x) any(x$start %in% interval & x$end %in% interval))]
-      met_duration = ifelse(length(met_events) != 0, sum(sapply(met_events, function(x) x$duration)), 0)
-      met_sever = ifelse(length(met_events) != 0, sum(sapply(met_events, function(x) x$severity)), 0)
-      met_info <- lapply(met_events, function(x) list(start = x$start, end = x$end, severity = x$severity))
-      wet_events <- SPI.humedad[sapply(SPI.humedad, function(x) any(x$start %in% interval & x$end %in% interval))]
-      wet_sever = ifelse(length(wet_events) != 0, sum(sapply(wet_events, function(x) x$severity)), 0)
-      hum_info <- lapply(wet_events, function(x) list(start = x$start, end = x$end, severity = x$severity))
-      duration <- met_duration
-      severity <- met_sever - wet_sever
-      matched_events[[i]] <- list(met_info = met_info, hum_info = hum_info, 
-                                  match_severity = severity, match_duration = duration)
-    }
   }
   
   # eliminar de matched severity cuando matched_events[[i]]$match_severity = 0
   matched_events <- Filter(function(x) !is.null(x$match_severity) && !isTRUE(all.equal(x$match_severity, 0)), matched_events)
-  
-  
   return(matched_events)
 }
+  
 # Aplicar la función de matching
 matched_events <- matching(exclusion.SPI, trigger, SPI.humedad)
 
@@ -439,45 +420,60 @@ Extraer.eventos = function(eventos) {
   return(events_df)
 }
 Sequia.InicialSPI = Extraer.eventos(SPI.sequias)
-humedad = Extraer.eventos(SPI.humedad)
 Sequia.InicialSSI = Extraer.eventos(SSI.sequias)
 # Crear el DataFrame combinando los datos de SPI y SSI
 Sequia.InicialSPI$type <- "SPI"
 Sequia.InicialSSI$type <- "SSI"
-humedad$type <- "Humedad"
-combined_data <- rbind(Sequia.InicialSPI, Sequia.InicialSSI, humedad)
+combined_data <- rbind(Sequia.InicialSPI, Sequia.InicialSSI)
 combined_data$start <- as.numeric(combined_data$start)
 combined_data$end <- as.numeric(combined_data$end)
-combined_data$severity <- as.numeric(combined_data$severity)
-write.csv(combined_data, "C:/Users/Jonna/Desktop/d/combined.csv")
 
-# Crear el gráfico con ggplot2
 
+# Grafico con las condiciones inicialpes de sequia 
 ggplot(combined_data) +
-  geom_rect(aes(xmin = start, xmax = end, ymin = 0, ymax = severity, fill = type), alpha = 1) +
-  scale_fill_manual(values = c("blue", "red", "brown")) +
+  geom_rect(aes(xmin = start, xmax = end + 1, ymin = 0, ymax = severity, fill = type), alpha = 0.5) +
+  scale_fill_manual(values = c("blue", "red")) +
   labs(title = "Eventos iniciales de sequía", x = "Fecha de inicio", y = "Severidad") +
   theme_minimal() +
   scale_x_continuous(breaks = seq(0, max(combined_data$end, na.rm = TRUE), by = 10)) +
   scale_y_continuous(breaks = seq(0, max(combined_data$severity, na.rm = TRUE), by = 0.5))
 
+# Grafico con el pooling
+Sequia.PoolingSPI = Extraer.eventos(pooling.SPI)
+Sequia.PoolingSSI = Extraer.eventos(pooling.SSI)
+Sequia.PoolingSPI$type <- "SPI"
+Sequia.PoolingSSI$type <- "SSI"
+sequias.poolingComb = rbind(Sequia.PoolingSPI, Sequia.PoolingSSI)
 
-# Exclusión de sequías gráfico --------------------------------------------
-sequias.excluidas.SPI = Extraer.eventos(exclusion.SPI)
-sequias.excluidas.SSI = Extraer.eventos(exclusion.SSI)
-sequias.excluidas.SPI$type <- "SPI"
-sequias.excluidas.SSI$type <- "SSI"
-sequias.excluidasComb = rbind(sequias.excluidas.SPI, sequias.excluidas.SSI)
-
-ggplot(sequias.excluidasComb) +
-  geom_rect(aes(xmin = start, xmax = end, ymin = 0, ymax = severity, fill = type), alpha = 0.5) +
+ggplot(sequias.poolingComb) +
+  geom_rect(aes(xmin = start, xmax = end + 1, ymin = 0, ymax = severity, fill = type), alpha = 0.5) +
   scale_fill_manual(values = c("blue", "red")) +
   labs(title = "Eventos iniciales de sequía", x = "Fecha de inicio", y = "Severidad") +
   theme_minimal() +
-  scale_x_continuous(breaks = seq(0, max(combined_data$end, na.rm = TRUE), by = 10), limits = c(0, max(combined_data$end, na.rm = TRUE))) +
-  scale_y_continuous(breaks = seq(0, max(combined_data$severity, na.rm = TRUE), by = 0.5), limits = c(0, max(combined_data$severity, na.rm = TRUE)))
+  scale_x_continuous(breaks = seq(0, max(sequias.poolingComb$end, na.rm = TRUE), by = 10)) + 
+  scale_y_continuous(breaks = seq(0, max(sequias.poolingComb$severity, na.rm = TRUE), by = 0.5))
 
-#-------------------------------------------------------------------------------
+# Grafico con el Matching
+trigger.intervals = sapply(trigger, function(x) x$trigger_interval)
+trigger.start = trigger.intervals[1,]
+trigger.end = trigger.intervals[2,]
+trigger.intervals = data.frame(start = trigger.start, end = trigger.end)
+exclucion.SPIgraf = Extraer.eventos(exclusion.SPI)
+exclucion.SPIgraf$end = ifelse(exclucion.SPIgraf$end - exclucion.SPIgraf$start == 0, exclucion.SPIgraf$end + 1, exclucion.SPIgraf$end)
+
+eventos.humedos = Extraer.eventos(SPI.humedad)
+eventos.humedos$end = ifelse(eventos.humedos$end - eventos.humedos$start == 0, eventos.humedos$end + 1, eventos.humedos$end)
+ggplot(trigger.intervals) +
+  geom_rect(aes(xmin = start, xmax = end, ymin = 0, ymax = 6), 
+            fill = "blue", alpha = 0.5, color = "black", size = 1) +
+  geom_rect(data = exclucion.SPIgraf, aes(xmin = start, xmax = end, ymin = severity - 0.5, ymax = severity, fill = "black"), alpha = 0.5) +
+  geom_rect(data = eventos.humedos, aes(xmin = start, xmax = end, ymin = 0, ymax = severity, fill = "red"), alpha = 0.5) +
+  labs(title = "Intervalos de activación", x = "Fecha de inicio", y = "Severidad") +
+  theme_minimal() +
+  scale_x_continuous(breaks = seq(0, max(trigger.intervals$end, na.rm = TRUE), by = 10)) +
+  scale_y_continuous(breaks = seq(0, 6, by = 0.5))
+
+
 # calculo de Tr
 Tr = (length(matched_events) / length(exclusion.SPI)) * 100
 Tr
