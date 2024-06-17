@@ -586,8 +586,6 @@ qf_gev <- function(p) qgev(p, loc = dist.match$Gev$results$par[1], scale = dist.
 qf_weibull <- function(p) qweibull(p, shape = dist.severidad.match$weibull$estimate[1], scale = dist.severidad.match$weibull$estimate[2])
 
 # a -----------------------------------------------------------------------
-
-
 # Calculo de la copula empírica 
 data = cbind(data.frame(u), data.frame(v))
 names(data) = c("SPI", "SSI")
@@ -654,7 +652,7 @@ menor.BIC = min(resultados$BIC)
 print(paste("De acuerdo con el analisis, el valor mas bajo de AIC presenta la copula de:", rownames(resultados)[which(resultados$AIC == menor.AIC)]))
 print(paste("De acuerdo con el analisis, el valor mas bajo de BIC presenta la copula de:", rownames(resultados)[which(resultados$BIC == menor.BIC)]))
 #-------------------------------------------------------------------------------
-fit = fitCopula(claytonCopula(dim = columnas), u, method = "ml")
+# fit = fitCopula(claytonCopula(dim = columnas), u, method = "ml")
 # ajusto a la copula normal
 fit = fitCopula(normalCopula(dim = columnas), u,data = cbind(u, v), method = "ml")
 copula_ajustada <- fit@copula
@@ -670,13 +668,4 @@ v_original <- qf_weibull(v)
 print(data.frame(u = u_original, v = v_original, C_uv = C_uv))
 
 #################### Calculo de los umbrales de propagación ####################
-u = as.vector(u)
-v = as.vector(v)
-C_uv = as.vector(C_uv)
-X = as.vector(dist.match)
-Y = as.vector(dist.severidad.match)
-# Calcular los umbrales de propagación
-library(bnlearn)
-red_bayesiana <- empty.graph(nodes = c("X", "Y"))
-arcos(red_bayesiana) <- matrix(c("X", "Y"), ncol = 2, byrow = TRUE)
-cpt(red_bayesiana) <- list(X = u, Y = v, Y = C_uv)
+
