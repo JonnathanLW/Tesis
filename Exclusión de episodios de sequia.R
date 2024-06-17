@@ -8,6 +8,7 @@ library(extRemes)
 library(gamlss)
 library(evd)
 library(bbmle)
+library(copula)
 # Funciones complementarias ----------------------------------------------------
 proces = function(df, name) {
   names(df) = c("date", name)
@@ -490,8 +491,19 @@ drought.duration = function(df){
   }
   return(duracion.match)
 }
+severiti = function(df) {
+  severidad = list()
+  for (i in 1:length(df)){
+    severity = df[[i]]$match_severity
+    severidad[[length(severidad) + 1]] = severity
+  }
+  return(severidad)
+}
 duracion.match = drought.duration(matched_events)
 duracion.match = unlist(duracion.match)
+severity.match = severiti(matched_events)
+severity.match = unlist(severity.match)
+
 # severidad de la sequía meteorológica 
 severiti.meteo = function(df) {
   severidad.meteo = list()
@@ -519,28 +531,31 @@ severidad.hidro = unlist(severidad.hidro)
 # Ajuste de la distribución marginal
 distribucion.match = function(df) {
   df = as.vector(df)
+  df = as.numeric(df)
   # Ajuste de distribuciones
   dist.weibull = fitdist(df, distr = "weibull")
   summary(dist.weibull)
   dist.exp = fitdist(df, distr = "exp")
   summary(dist.exp)
-  
-  m1 <- mle2(df ~ dgev(loc, exp(logscale), shape), data = data.frame(df), 
-             start = list(loc = 0, logscale = 0, shape = 0), method = "Nelder-Mead")
-  
-  dist.gev = fitdist(df, "gev", 
-                     start= with(as.list(coef(m1)), list(loc = loc, scale = exp(logscale), shape = shape)))
-  summary(dist.gev)
+  dist.Gev = fevd(df, type = "GEV")
+  summary(dist.Gev)
   
   # Calculo de los AIC 
+  # Log-verosimilitud negativa
+  neg_log_likelihood <- dist.Gev$results$value
+  
+  # Número de parámetros
+  num_params <- length(dist.Gev$results$par)
+  # Calcular el AIC
   aic.weibull = dist.weibull$aic
   aic.exp = dist.exp$aic
-  aic.gev = dist.gev$aic
+  aic.gev = 2 * num_params + 2 * neg_log_likelihood
+
   
   # Kolmogorov smirnov
   ks.weibull = ks.test(df, "pweibull", shape = dist.weibull$estimate[1], scale = dist.weibull$estimate[2])
   ks.exp = ks.test(df, "pexp", rate = dist.exp$estimate[1])
-  ks.gev = ks.test(df, "pgev", loc = dist.gev$estimate[1], scale = dist.gev$estimate[2], shape = dist.gev$estimate[3])
+  ks.gev = ks.test(df, "pgev", loc = dist.Gev$results$par[1], scale = dist.Gev$results$par[2], shape = dist.Gev$results$par[3])
 
 
   
@@ -550,10 +565,118 @@ distribucion.match = function(df) {
     gev = c(aic.gev, ks.gev$statistic, ks.gev$p.value))
   rownames(resultados) = c("AIC", "estatics", "p-value KS")
   
-  return(resultados)
+  return(list(resultados = resultados, weibull = dist.weibull, exp = dist.exp, Gev = dist.Gev))
 }
 
 dist.match = distribucion.match(duracion.match)
-dist.severidad.meteo = distribucion.match(severidad.meteo)
-dist.severidad.hidro = distribucion.match(severidad.hidro)
+dist.severidad.match = distribucion.match(severity.match)
+# dist.severidad.meteo = distribucion.match(severidad.meteo)
+# dist.severidad.hidro = distribucion.match(severidad.hidro)
 #-------------------------------------------------------------------------------
+# Funciones de distribución acumulada (CDF) para las distribuciones GEV y Weibull ajustadas
+qf_gev <- function(p) pgev(p, loc = dist.match$Gev$results$par[1], scale = dist.match$Gev$results$par[2], shape = dist.match$Gev$results$par[3])
+qf_weibull <- function(p) pweibull(p, shape = dist.severidad.match$weibull$estimate[1], scale = dist.severidad.match$weibull$estimate[2])
+
+# Calcular u y v para cada observación en tus datos
+u <- sapply(duracion.match, function(x) pnorm(qf_gev(x)))
+v <- sapply(severity.match, function(y) pnorm(qf_weibull(y)))
+
+# Definir las funciones cuantil inversa (percentil) para GEV y Weibull
+qf_gev <- function(p) qgev(p, loc = dist.match$Gev$results$par[1], scale = dist.match$Gev$results$par[2], shape = dist.match$Gev$results$par[3])
+qf_weibull <- function(p) qweibull(p, shape = dist.severidad.match$weibull$estimate[1], scale = dist.severidad.match$weibull$estimate[2])
+
+# a -----------------------------------------------------------------------
+
+
+# Calculo de la copula empírica 
+data = cbind(data.frame(u), data.frame(v))
+names(data) = c("SPI", "SSI")
+n = length(data$SPI)
+columnas = ncol(data)
+
+x = matrix(c(data$SPI, data$SSI, data$drought), n, columnas)
+
+u = pobs(x)
+
+# criterio AIC Y BIC
+criterios = function(Log_likel){
+  AIC = -2 * Log_likel + 2 * 1 #-2*log-likelihood + k*npar
+  BIC = -2 * Log_likel + log(n) * 1 #-2*log-likelihood + k*npar
+  crit = data.frame(AIC = AIC, BIC = BIC)
+  return(crit)
+}
+
+# Cópulas elípticas ----------------------------------------------------------
+# Copula normal
+Normal = fitCopula(normalCopula(dim = columnas), u, method = "ml")
+Log.Normal = Normal@loglik
+C.Normal = criterios(Log.Normal)
+
+# Copula t
+t = fitCopula(tCopula(dim = columnas), u, method = "ml")
+Log.t = t@loglik
+C.t = criterios(Log.t)
+
+# ----------------------------------------------------------------------------
+# Familia de copulas arquimidianas -------------------------------------------
+# # copula Ali–Mikhail–Haq
+# Ali = fitCopula(amhCopula(dim = columnas), u, method = "ml")
+# Log.Ali = Ali@loglik
+# C.Ali = criterios(Log.Ali)
+
+# Copula de Clayton  
+Clayton = fitCopula(claytonCopula(dim = columnas), u, method = "ml")
+Log.Clayton = Clayton@loglik
+C.Clayton = criterios(Log.Clayton)
+
+# Copula de Frank
+Frank = fitCopula(frankCopula(dim = columnas), u, method = "ml")
+Log.Frank = Frank@loglik
+C.Frank = criterios(Log.Frank)
+
+# Copula de Gumbel
+Gumble = fitCopula(gumbelCopula(), u, method = "ml")
+Log.Gumble = Gumble@loglik
+C.Gumble = criterios(Log.Gumble)
+
+# ------------------------------------------------------------------------------
+# Data frame para guardar resultados
+resultados = data.frame(
+  Estimador = c(Normal@estimate, t@estimate[2], Clayton@estimate, Frank@estimate, Gumble@estimate),
+  Error.estand = c(Normal@var.est, NA, Clayton@var.est, Frank@var.est, Gumble@var.est),
+  AIC = c(C.Normal$AIC, C.t$AIC, C.Clayton$AIC, C.Frank$AIC, C.Gumble$AIC),
+  BIC = c(C.Normal$BIC, C.t$BIC, C.Clayton$BIC, C.Frank$BIC, C.Gumble$BIC),
+  row.names = c("Normal", "t", "Clayton", "Frank", "Gumble")
+)
+
+menor.AIC = min(resultados$AIC)
+menor.BIC = min(resultados$BIC)
+print(paste("De acuerdo con el analisis, el valor mas bajo de AIC presenta la copula de:", rownames(resultados)[which(resultados$AIC == menor.AIC)]))
+print(paste("De acuerdo con el analisis, el valor mas bajo de BIC presenta la copula de:", rownames(resultados)[which(resultados$BIC == menor.BIC)]))
+#-------------------------------------------------------------------------------
+fit = fitCopula(claytonCopula(dim = columnas), u, method = "ml")
+# ajusto a la copula normal
+fit = fitCopula(normalCopula(dim = columnas), u,data = cbind(u, v), method = "ml")
+copula_ajustada <- fit@copula
+C_uv <- pCopula(cbind(u, v), copula_ajustada)
+
+# Transformar de vuelta a la escala original usando las funciones cuantil inversas
+qf_gev <- function(p) qgev(p, loc = dist.match$Gev$results$par[1], scale = dist.match$Gev$results$par[2], shape = dist.match$Gev$results$par[3])
+qf_weibull <- function(p) qweibull(p, shape = dist.severidad.match$weibull$estimate[1], scale = dist.severidad.match$weibull$estimate[2])
+u_original <- qf_gev(u)
+v_original <- qf_weibull(v)
+
+# Imprimir los valores de la cópula en la escala original
+print(data.frame(u = u_original, v = v_original, C_uv = C_uv))
+
+#################### Calculo de los umbrales de propagación ####################
+u = as.vector(u)
+v = as.vector(v)
+C_uv = as.vector(C_uv)
+X = as.vector(dist.match)
+Y = as.vector(dist.severidad.match)
+# Calcular los umbrales de propagación
+library(bnlearn)
+red_bayesiana <- empty.graph(nodes = c("X", "Y"))
+arcos(red_bayesiana) <- matrix(c("X", "Y"), ncol = 2, byrow = TRUE)
+cpt(red_bayesiana) <- list(X = u, Y = v, Y = C_uv)
